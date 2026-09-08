@@ -152,6 +152,7 @@ footer{margin-top:28px;font-size:12px;color:var(--faint);border-top:1px solid va
         <option value="est_asc">推定イン1着率が低い順</option>
         <option value="venue">場・R番順</option>
       </select>
+      <button onclick="makeNote()">note用の記事を作る</button>
       <button onclick="document.getElementById('paste3').value='';document.getElementById('recoOut').innerHTML='';document.getElementById('fileName').textContent='B******.TXT を選択、または下に貼り付け';">クリア</button>
     </div>
     <div id="customBox" style="display:none;margin-top:8px;padding:10px 12px;background:var(--panel2);border-radius:8px">
@@ -190,6 +191,23 @@ footer{margin-top:28px;font-size:12px;color:var(--faint);border-top:1px solid va
       </div>
     </div>
     <p class="hint" id="msg3"></p>
+    <div id="noteBox" style="display:none;margin-top:10px">
+      <div class="row" style="margin-bottom:6px">
+        <label style="font-size:12px">形式</label>
+        <select id="noteFmt" class="s" onchange="makeNote()">
+          <option value="plain">テキスト(note・SNS向け)</option>
+          <option value="md">Markdown(表つき)</option>
+        </select>
+        <label style="font-size:12px">件数</label>
+        <select id="noteN" class="s" onchange="makeNote()">
+          <option value="5">5件</option><option value="10" selected>10件</option>
+          <option value="20">20件</option><option value="999">すべて</option>
+        </select>
+        <button class="primary" onclick="copyNote()">コピー</button>
+        <span id="noteMsg" style="font-size:12px;color:var(--pos)"></span>
+      </div>
+      <textarea id="noteOut" style="min-height:280px;font-family:ui-monospace,monospace;font-size:12px"></textarea>
+    </div>
     <div id="recoOut" class="tblwrap" style="margin-top:8px;max-height:70vh;overflow:auto"></div>
   </div>
 
@@ -647,6 +665,79 @@ function suggestBet(x,ev){
   const p=ord.filter(i=>i!==0).slice(0,3).map(i=>i+1).sort((a,b)=>a-b);
   return cp(1)+'<span style="color:var(--faint)">-</span>'+p.map(cp).join("")
     +'<span style="color:var(--faint)">=</span>'+p.map(cp).join("");
+}
+function noteList(){
+  const mode=document.getElementById("recoMode").value;
+  let list=PROG.map(x=>({...x,ev:evalRace(x)}));
+  if(mode==="strong") list=list.filter(x=>x.ev.top1&&x.ev.a1);
+  else if(mode==="kado") list=list.filter(x=>x.ev.kadoStrong);
+  else if(mode==="aare") list=list.filter(x=>x.ev.weak1);
+  else if(mode==="custom") list=list.filter(matchCustom);
+  const sort=document.getElementById("recoSort").value;
+  const tv=x=>x.dl?(+x.dl.split(":")[0])*60+(+x.dl.split(":")[1]):9999;
+  if(sort==="time") list.sort((a,b)=>tv(a)-tv(b)||a.v-b.v);
+  else if(sort==="est") list.sort((a,b)=>b.ev.est-a.ev.est);
+  else if(sort==="est_asc") list.sort((a,b)=>a.ev.est-b.ev.est);
+  else list.sort((a,b)=>a.v-b.v||a.r-b.r);
+  return list;
+}
+function betPlain(x,ev){
+  const e=x.e, G={A1:4,A2:3,B1:2,B2:1}, ord=ev.ord;
+  if(ev.est>=68){
+    const p=ord.filter(i=>i!==0).slice(0,2).map(i=>i+1).sort((a,b)=>a-b);
+    const rest=[2,3,4].filter(v=>!p.includes(v));
+    return `1-${p.join("")}=${(rest.length?rest:[5]).join("")}`;
+  }
+  if(ev.kadoStrong&&ev.est<60) return "4-5=12";
+  if(ev.est<45) return ord.slice(0,3).map(i=>i+1).sort((a,b)=>a-b).join("")+" BOX";
+  const p=ord.filter(i=>i!==0).slice(0,3).map(i=>i+1).sort((a,b)=>a-b);
+  return `1-${p.join("")}=${p.join("")}`;
+}
+function makeNote(){
+  if(!PROG.length){setMsg("msg3","先に番組表を評価してください",false);return;}
+  document.getElementById("noteBox").style.display="";
+  const fmt=document.getElementById("noteFmt").value;
+  const n=+document.getElementById("noteN").value;
+  const list=noteList().slice(0,n);
+  const modeLabel={strong:"1コースが堅いレース",kado:"カドが有力なレース",
+    aare:"荒れそうなレース",all:"全レース",custom:"独自条件で抽出"}[document.getElementById("recoMode").value];
+  const d=new Date();
+  const head=`${d.getMonth()+1}月${d.getDate()}日の注目レース(${modeLabel})`;
+  let t="";
+  if(fmt==="md"){
+    t=`## ${head}\n\n`
+     +`| 締切 | 場 | R | ①号艇 | 推定1着率 | 買い目の候補 |\n|---|---|---|---|---|---|\n`
+     +list.map(x=>`| ${x.dl||"—"} | ${VENMAP[x.v]||x.v} | ${x.r}R | ${x.e[0].name}(${x.e[0].grade} ${(x.e[0].nat||0).toFixed(2)}) | ${x.ev.est.toFixed(1)}% | ${betPlain(x,x.ev)} |`).join("\n")
+     +`\n\n各艇の推定1着率\n\n`
+     +list.map(x=>`- ${VENMAP[x.v]||x.v}${x.r}R … ${x.ev.P.map((p,i)=>`${i+1}号艇 ${p.toFixed(0)}%`).join(" / ")}`).join("\n");
+  }else{
+    t=`【${head}】\n\n`
+     +list.map(x=>{
+        const e=x.e;
+        return `▼${x.dl||""} ${VENMAP[x.v]||x.v} ${x.r}R\n`
+         +`　①${e[0].name}(${e[0].grade}・勝率${(e[0].nat||0).toFixed(2)})\n`
+         +`　推定1着率 ${x.ev.P.map((p,i)=>`${i+1}号艇${p.toFixed(0)}%`).join(" ")}\n`
+         +`　買い目の候補 ${betPlain(x,x.ev)}`;
+     }).join("\n\n");
+  }
+  t+=`\n\n---\n※推定1着率は公開データ約4.7万レースで学習・較正したモデルによるものです(進入は枠なり想定)。`
+   +`\n※買い目の候補は出発点にすぎません。番組表だけの情報で組んだ場合の回収率は約77%でした。`
+   +`\n締切前に展示タイムと進入コースを確認して組み直すことを前提としています。`
+   +`\n※当たることを保証するものではありません。予算を決めてお楽しみください。`;
+  document.getElementById("noteOut").value=t;
+  setMsg("msg3",`${list.length}件を書き出しました`,true);
+}
+function copyNote(){
+  const t=document.getElementById("noteOut");
+  t.select();
+  navigator.clipboard.writeText(t.value).then(()=>{
+    const m=document.getElementById("noteMsg");
+    m.textContent="コピーしました";
+    setTimeout(()=>m.textContent="",2000);
+  }).catch(()=>{
+    document.execCommand("copy");
+    document.getElementById("noteMsg").textContent="コピーしました";
+  });
 }
 function buildCustom(){
   const g=document.getElementById("cuGrades");
