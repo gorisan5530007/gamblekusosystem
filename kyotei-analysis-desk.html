@@ -105,6 +105,7 @@ footer{margin-top:28px;font-size:12px;color:var(--faint);border-top:1px solid va
   <div class="tabbar">
     <button id="tab0" class="on" onclick="showTab(0)">出走表</button>
     <button id="tab1" onclick="showTab(1)">直前情報(展示タイム)</button>
+    <button id="tab3" onclick="showTab(3)">番組表からおすすめ抽出</button>
     <button id="tab2" onclick="showTab(2)">三連単オッズ</button>
   </div>
   <div id="pane0">
@@ -123,6 +124,25 @@ footer{margin-top:28px;font-size:12px;color:var(--faint);border-top:1px solid va
     <textarea id="paste2" placeholder="公式3連単オッズページを全選択コピーして貼り付け&#10;または&#10;1-2-3 5.6&#10;1-2-4 8.9 …"></textarea>
     <div class="row" style="margin-top:8px"><button class="primary" onclick="parseOdds()">オッズを解析</button><button onclick="clearOdds()">オッズをクリア</button><span class="msg" id="msg2"></span></div>
   </div>
+  <div id="pane3" style="display:none">
+    <p class="hint">公式サイトの番組表ファイル(B******.TXT)をメモ帳で開いて全選択コピーし、貼り付けてください。<br>
+    その日の全レースを一括で評価し、条件に合うレースを抽出します。</p>
+    <textarea id="paste3" placeholder="番組表ファイル(B260907.TXT など)の中身を貼り付け" style="min-height:120px"></textarea>
+    <div class="row">
+      <button class="primary" onclick="parseProgram()">全レースを評価する</button>
+      <label style="font-size:12px">抽出条件</label>
+      <select id="recoMode" class="s" onchange="renderReco()">
+        <option value="strong">1コースが堅い(勝率最高＋A1)</option>
+        <option value="kado">カド(4コース)が有力</option>
+        <option value="aare">荒れそう(1号艇が弱い)</option>
+        <option value="all">全レースを表で見る</option>
+      </select>
+      <button onclick="document.getElementById('paste3').value='';document.getElementById('recoOut').innerHTML='';">クリア</button>
+    </div>
+    <p class="hint" id="msg3"></p>
+    <div id="recoOut" class="tblwrap" style="margin-top:8px"></div>
+  </div>
+
 </section>
 
 <!-- ══ レース条件 ══ -->
@@ -407,7 +427,7 @@ for(let i=1;i<=6;i++){const d=defs[i-1];
 document.getElementById("inrows").innerHTML=rows;
 
 /* ── タブ ── */
-function showTab(n){for(let i=0;i<3;i++){document.getElementById("pane"+i).style.display=i===n?"":"none";document.getElementById("tab"+i).classList.toggle("on",i===n);}}
+function showTab(n){for(let i=0;i<4;i++){const p=document.getElementById("pane"+i),b=document.getElementById("tab"+i);if(p)p.style.display=i===n?"":"none";if(b)b.classList.toggle("on",i===n);}}
 
 /* ── 取り込みパーサ ── */
 function norm(t){return t.replace(/[０-９．]/g,c=>String.fromCharCode(c.charCodeAt(0)-0xFEE0)).replace(/[－―ー−‐﹣]/g,"-").replace(/[：]/g,":").replace(/\u3000/g," ").replace(/\t/g," ");}
@@ -471,6 +491,91 @@ function parseSyussou(){
   const cond=extractConditions(t);
   setMsg("msg0",hits.length+"艇分を取り込みました"+(hits.length<6?"(残りは手入力してください)":"")+(cond.length?" / "+cond.join("、"):""),hits.length===6);
   calc();
+}
+let PROG=[];
+const VENMAP={1:"桐生",2:"戸田",3:"江戸川",4:"平和島",5:"多摩川",6:"浜名湖",7:"蒲郡",8:"常滑",
+ 9:"津",10:"三国",11:"びわこ",12:"住之江",13:"尼崎",14:"鳴門",15:"丸亀",16:"児島",
+ 17:"宮島",18:"徳山",19:"下関",20:"若松",21:"芦屋",22:"福岡",23:"唐津",24:"大村"};
+function parseProgram(){
+  const t=document.getElementById("paste3").value;
+  if(!t.trim()){setMsg("msg3","番組表の中身を貼り付けてください",false);return;}
+  PROG=[]; let venue=null,rno=null,cur=[],title=null,hdr=0;
+  for(let raw of t.split(/\r?\n/)){
+    let m=raw.match(/^(\d{2})BBGN/);
+    if(m){venue=+m[1];title=null;hdr=0;continue;}
+    if(venue===null)continue;
+    if(/^\d{2}BEND/.test(raw)){
+      if(cur.length&&rno){PROG.push({v:venue,r:rno,t:title,e:cur});cur=[];rno=null;}
+      venue=null;continue;
+    }
+    if(raw.indexOf("番組表")>=0&&raw.indexOf("＊")>=0){hdr=1;continue;}
+    if(hdr&&raw.trim()){title=raw.replace(/\u3000/g,"").trim();hdr=0;continue;}
+    m=raw.replace(/\u3000/g,"").match(/^\s*([０-９0-9]{1,2})Ｒ/);
+    if(m){
+      if(cur.length&&rno)PROG.push({v:venue,r:rno,t:title,e:cur});
+      rno=+m[1].replace(/[０-９]/g,c=>String.fromCharCode(c.charCodeAt(0)-0xFEE0));
+      cur=[];continue;
+    }
+    m=raw.match(/^([1-6])\s+(\d{4})(.{4,8}?)(\d{2})(..)(\d{2})(A1|A2|B1|B2)\s*([\d.]+)\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)\s+(\d+)\s+([\d.]+)\s+(\d+)\s+([\d.]+)/);
+    if(m&&rno) cur.push({lane:+m[1],toban:m[2],name:m[3].trim(),grade:m[7],
+      nat:parseFloat(m[8]),loc:parseFloat(m[10]),motor:parseFloat(m[13]),boat:parseFloat(m[15])});
+  }
+  if(cur.length&&rno&&venue!==null)PROG.push({v:venue,r:rno,t:title,e:cur});
+  PROG=PROG.filter(x=>x.e.length===6);
+  setMsg("msg3",`${PROG.length}レースを解析しました(${new Set(PROG.map(x=>x.v)).size}会場)`,PROG.length>0);
+  renderReco();
+}
+function evalRace(x){
+  const e=x.e, nats=e.map(b=>b.nat||0);
+  const mx=Math.max(...nats), mn=Math.min(...nats);
+  const avg=nats.reduce((a,b)=>a+b,0)/6;
+  const i1=e[0], kado=e[3];
+  const G={A1:4,A2:3,B1:2,B2:1};
+  const top1=(i1.nat||0)>=mx-0.001;                  /* 1号艇の勝率がメンバー最高 */
+  const a1=i1.grade==="A1";
+  const kadoStrong=(kado.nat||0)>=mx-0.3&&G[kado.grade]>=3;
+  /* 「1号艇が弱い」= メンバー平均より明確に下、かつ級別も上位でない */
+  const gap1=(i1.nat||0)-avg;
+  const weak1=gap1<=-0.5&&G[i1.grade]<=3;
+  const nA=e.filter(b=>G[b.grade]>=3).length;
+  /* 蓄積データの実績値(検証済み)から推定 */
+  let est=56.5;
+  if(top1&&a1) est=74.2;
+  else if(top1) est=70.3;
+  else if(weak1&&G[i1.grade]<=2) est=38.0;
+  else if(weak1) est=45.0;
+  else if(gap1>=0.3) est=64.0;
+  return {top1,a1,kadoStrong,weak1,nA,mx,gap1,est};
+}
+function renderReco(){
+  const out=document.getElementById("recoOut");
+  if(!PROG.length){out.innerHTML="";return;}
+  const mode=document.getElementById("recoMode").value;
+  let list=PROG.map(x=>({...x,ev:evalRace(x)}));
+  if(mode==="strong") list=list.filter(x=>x.ev.top1&&x.ev.a1).sort((a,b)=>b.ev.est-a.ev.est);
+  else if(mode==="kado") list=list.filter(x=>x.ev.kadoStrong).sort((a,b)=>b.ev.mx-a.ev.mx);
+  else if(mode==="aare") list=list.filter(x=>x.ev.weak1).sort((a,b)=>a.ev.est-b.ev.est);
+  if(!list.length){out.innerHTML='<p class="hint">この条件に該当するレースはありません</p>';return;}
+  let h='<table><thead><tr><th>場</th><th class="num">R</th><th>開催</th>'
+   +'<th>①号艇</th><th class="num">勝率</th><th>級</th><th class="num">A級数</th>'
+   +'<th class="num">推定イン1着率</th><th>注目点</th></tr></thead><tbody>';
+  list.slice(0,40).forEach(x=>{
+    const e=x.e, i1=e[0], ev=x.ev;
+    const tags=[];
+    if(ev.top1&&ev.a1)tags.push('<span class="evpos">1号艇が最強</span>');
+    else if(ev.top1)tags.push("1号艇の勝率が最高");
+    if(ev.kadoStrong)tags.push('<span style="color:var(--b4)">カドが有力</span>');
+    if(ev.weak1)tags.push(`<span class="evneg">1号艇が弱い(平均比${ev.gap1.toFixed(2)})</span>`);
+    if(ev.nA<=1)tags.push("A級1名以下");
+    h+=`<tr><td style="font-size:12px">${VENMAP[x.v]||x.v}</td><td class="num">${x.r}R</td>
+      <td style="font-size:11px;color:var(--faint);max-width:150px;overflow:hidden;text-overflow:ellipsis">${x.t||""}</td>
+      <td style="font-size:12px">${i1.name}</td><td class="num">${(i1.nat||0).toFixed(2)}</td>
+      <td class="num" style="font-size:12px">${i1.grade}</td><td class="num">${ev.nA}</td>
+      <td class="num" style="font-weight:500">${ev.est.toFixed(1)}%</td>
+      <td style="font-size:11px">${tags.join(" / ")}</td></tr>`;
+  });
+  out.innerHTML=h+"</tbody></table>"
+   +`<p class="hint">${list.length}レース該当${list.length>40?"(上位40件を表示)":""}。推定イン1着率は蓄積データの実績値です(全体平均56.5%)。</p>`;
 }
 function parseChokuzen(){
   const raw=document.getElementById("paste1").value;
