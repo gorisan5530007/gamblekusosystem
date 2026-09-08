@@ -127,17 +127,30 @@ footer{margin-top:28px;font-size:12px;color:var(--faint);border-top:1px solid va
   <div id="pane3" style="display:none">
     <p class="hint">公式サイトの番組表ファイル(B******.TXT)をメモ帳で開いて全選択コピーし、貼り付けてください。<br>
     その日の全レースを一括で評価し、条件に合うレースを抽出します。</p>
-    <textarea id="paste3" placeholder="番組表ファイル(B260907.TXT など)の中身を貼り付け" style="min-height:120px"></textarea>
+    <div class="row" style="margin-bottom:6px">
+      <label class="primary" style="cursor:pointer;padding:7px 14px;border-radius:6px;font-size:13px;display:inline-block">
+        ファイルを選ぶ<input type="file" id="progFile" accept=".txt,.TXT,.lzh" style="display:none" onchange="loadProgFile(this)">
+      </label>
+      <span style="font-size:12px;color:var(--sub)" id="fileName">B******.TXT を選択、または下に貼り付け</span>
+    </div>
+    <textarea id="paste3" placeholder="番組表ファイル(B260907.TXT など)の中身を貼り付け" style="min-height:100px"></textarea>
     <div class="row">
       <button class="primary" onclick="parseProgram()">全レースを評価する</button>
-      <label style="font-size:12px">抽出条件</label>
+      <label style="font-size:12px">抽出</label>
       <select id="recoMode" class="s" onchange="renderReco()">
         <option value="strong">1コースが堅い(勝率最高＋A1)</option>
         <option value="kado">カド(4コース)が有力</option>
         <option value="aare">荒れそう(1号艇が弱い)</option>
-        <option value="all">全レースを表で見る</option>
+        <option value="all">全レース</option>
       </select>
-      <button onclick="document.getElementById('paste3').value='';document.getElementById('recoOut').innerHTML='';">クリア</button>
+      <label style="font-size:12px">並び</label>
+      <select id="recoSort" class="s" onchange="renderReco()">
+        <option value="time">締切時刻が早い順</option>
+        <option value="est">推定イン1着率が高い順</option>
+        <option value="est_asc">推定イン1着率が低い順</option>
+        <option value="venue">場・R番順</option>
+      </select>
+      <button onclick="document.getElementById('paste3').value='';document.getElementById('recoOut').innerHTML='';document.getElementById('fileName').textContent='B******.TXT を選択、または下に貼り付け';">クリア</button>
     </div>
     <p class="hint" id="msg3"></p>
     <div id="recoOut" class="tblwrap" style="margin-top:8px"></div>
@@ -493,34 +506,51 @@ function parseSyussou(){
   calc();
 }
 let PROG=[];
+function loadProgFile(inp){
+  const f=inp.files&&inp.files[0];
+  if(!f)return;
+  document.getElementById("fileName").textContent=f.name+" を読み込み中…";
+  const r=new FileReader();
+  r.onload=()=>{
+    document.getElementById("paste3").value=r.result;
+    document.getElementById("fileName").textContent=f.name;
+    parseProgram();
+  };
+  r.onerror=()=>{document.getElementById("fileName").textContent="読み込みに失敗しました";};
+  /* 公式ファイルはShift_JIS */
+  r.readAsText(f,"Shift_JIS");
+}
 const VENMAP={1:"桐生",2:"戸田",3:"江戸川",4:"平和島",5:"多摩川",6:"浜名湖",7:"蒲郡",8:"常滑",
  9:"津",10:"三国",11:"びわこ",12:"住之江",13:"尼崎",14:"鳴門",15:"丸亀",16:"児島",
  17:"宮島",18:"徳山",19:"下関",20:"若松",21:"芦屋",22:"福岡",23:"唐津",24:"大村"};
 function parseProgram(){
   const t=document.getElementById("paste3").value;
   if(!t.trim()){setMsg("msg3","番組表の中身を貼り付けてください",false);return;}
-  PROG=[]; let venue=null,rno=null,cur=[],title=null,hdr=0;
+  PROG=[]; let venue=null,rno=null,cur=[],title=null,hdr=0,deadline=null;
   for(let raw of t.split(/\r?\n/)){
     let m=raw.match(/^(\d{2})BBGN/);
     if(m){venue=+m[1];title=null;hdr=0;continue;}
     if(venue===null)continue;
     if(/^\d{2}BEND/.test(raw)){
-      if(cur.length&&rno){PROG.push({v:venue,r:rno,t:title,e:cur});cur=[];rno=null;}
+      if(cur.length&&rno){PROG.push({v:venue,r:rno,t:title,e:cur,dl:deadline});cur=[];rno=null;}
       venue=null;continue;
     }
     if(raw.indexOf("番組表")>=0&&raw.indexOf("＊")>=0){hdr=1;continue;}
     if(hdr&&raw.trim()){title=raw.replace(/\u3000/g,"").trim();hdr=0;continue;}
     m=raw.replace(/\u3000/g,"").match(/^\s*([０-９0-9]{1,2})Ｒ/);
     if(m){
-      if(cur.length&&rno)PROG.push({v:venue,r:rno,t:title,e:cur});
+      if(cur.length&&rno)PROG.push({v:venue,r:rno,t:title,e:cur,dl:deadline});
       rno=+m[1].replace(/[０-９]/g,c=>String.fromCharCode(c.charCodeAt(0)-0xFEE0));
-      cur=[];continue;
+      cur=[];
+      const dm=raw.replace(/\u3000/g,"").match(/締切予定\s*([０-９0-9]{1,2})[：:]([０-９0-9]{2})/);
+      deadline=dm?(dm[1]+":"+dm[2]).replace(/[０-９]/g,c=>String.fromCharCode(c.charCodeAt(0)-0xFEE0)):null;
+      continue;
     }
     m=raw.match(/^([1-6])\s+(\d{4})(.{4,8}?)(\d{2})(..)(\d{2})(A1|A2|B1|B2)\s*([\d.]+)\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)\s+(\d+)\s+([\d.]+)\s+(\d+)\s+([\d.]+)/);
     if(m&&rno) cur.push({lane:+m[1],toban:m[2],name:m[3].trim(),grade:m[7],
       nat:parseFloat(m[8]),loc:parseFloat(m[10]),motor:parseFloat(m[13]),boat:parseFloat(m[15])});
   }
-  if(cur.length&&rno&&venue!==null)PROG.push({v:venue,r:rno,t:title,e:cur});
+  if(cur.length&&rno&&venue!==null)PROG.push({v:venue,r:rno,t:title,e:cur,dl:deadline});
   PROG=PROG.filter(x=>x.e.length===6);
   setMsg("msg3",`${PROG.length}レースを解析しました(${new Set(PROG.map(x=>x.v)).size}会場)`,PROG.length>0);
   renderReco();
@@ -547,18 +577,49 @@ function evalRace(x){
   else if(gap1>=0.3) est=64.0;
   return {top1,a1,kadoStrong,weak1,nA,mx,gap1,est};
 }
+function suggestBet(x,ev){
+  /* 蓄積データの検証に基づく買い目(番組表の情報だけで決まる範囲) */
+  const e=x.e, G={A1:4,A2:3,B1:2,B2:1};
+  const cp=i=>`<span class="chip" style="width:17px;height:17px;font-size:10px;background:${BC[i-1]};color:${BT[i-1]}">${i}</span>`;
+  const nats=e.map(b=>b.nat||0);
+  const ord=[0,1,2,3,4,5].sort((a,b)=>nats[b]-nats[a]);
+  if(ev.top1&&ev.a1){
+    /* 1号艇が最強 → ①-相手2艇=残り */
+    const p=ord.filter(i=>i!==0).slice(0,2).map(i=>i+1).sort((a,b)=>a-b);
+    return cp(1)+'<span style="color:var(--faint)">-</span>'+p.map(cp).join("")
+      +'<span style="color:var(--faint)">=</span>'+[2,3,4].filter(v=>!p.includes(v)).map(cp).join("");
+  }
+  if(ev.kadoStrong){
+    return cp(4)+'<span style="color:var(--faint)">-</span>'+cp(5)
+      +'<span style="color:var(--faint)">=</span>'+cp(1)+cp(2);
+  }
+  if(ev.weak1){
+    /* 荒れそう → 勝率上位3艇のボックス */
+    const t3=ord.slice(0,3).map(i=>i+1).sort((a,b)=>a-b);
+    return t3.map(cp).join("")+'<span style="font-size:10px;color:var(--faint)">BOX</span>';
+  }
+  const p=ord.filter(i=>i!==0).slice(0,3).map(i=>i+1).sort((a,b)=>a-b);
+  return cp(1)+'<span style="color:var(--faint)">-</span>'+p.map(cp).join("")
+    +'<span style="color:var(--faint)">=</span>'+p.map(cp).join("");
+}
 function renderReco(){
   const out=document.getElementById("recoOut");
   if(!PROG.length){out.innerHTML="";return;}
   const mode=document.getElementById("recoMode").value;
   let list=PROG.map(x=>({...x,ev:evalRace(x)}));
-  if(mode==="strong") list=list.filter(x=>x.ev.top1&&x.ev.a1).sort((a,b)=>b.ev.est-a.ev.est);
-  else if(mode==="kado") list=list.filter(x=>x.ev.kadoStrong).sort((a,b)=>b.ev.mx-a.ev.mx);
-  else if(mode==="aare") list=list.filter(x=>x.ev.weak1).sort((a,b)=>a.ev.est-b.ev.est);
+  if(mode==="strong") list=list.filter(x=>x.ev.top1&&x.ev.a1);
+  else if(mode==="kado") list=list.filter(x=>x.ev.kadoStrong);
+  else if(mode==="aare") list=list.filter(x=>x.ev.weak1);
+  const sort=document.getElementById("recoSort").value;
+  const tv=x=>x.dl?(+x.dl.split(":")[0])*60+(+x.dl.split(":")[1]):9999;
+  if(sort==="time") list.sort((a,b)=>tv(a)-tv(b)||a.v-b.v);
+  else if(sort==="est") list.sort((a,b)=>b.ev.est-a.ev.est);
+  else if(sort==="est_asc") list.sort((a,b)=>a.ev.est-b.ev.est);
+  else list.sort((a,b)=>a.v-b.v||a.r-b.r);
   if(!list.length){out.innerHTML='<p class="hint">この条件に該当するレースはありません</p>';return;}
-  let h='<table><thead><tr><th>場</th><th class="num">R</th><th>開催</th>'
-   +'<th>①号艇</th><th class="num">勝率</th><th>級</th><th class="num">A級数</th>'
-   +'<th class="num">推定イン1着率</th><th>注目点</th></tr></thead><tbody>';
+  let h='<table><thead><tr><th class="num">締切</th><th>場</th><th class="num">R</th>'
+   +'<th>①号艇</th><th class="num">勝率</th><th>級</th><th class="num">A級</th>'
+   +'<th class="num">推定イン</th><th>推奨買い目</th><th>注目点</th></tr></thead><tbody>';
   list.slice(0,40).forEach(x=>{
     const e=x.e, i1=e[0], ev=x.ev;
     const tags=[];
@@ -567,11 +628,13 @@ function renderReco(){
     if(ev.kadoStrong)tags.push('<span style="color:var(--b4)">カドが有力</span>');
     if(ev.weak1)tags.push(`<span class="evneg">1号艇が弱い(平均比${ev.gap1.toFixed(2)})</span>`);
     if(ev.nA<=1)tags.push("A級1名以下");
-    h+=`<tr><td style="font-size:12px">${VENMAP[x.v]||x.v}</td><td class="num">${x.r}R</td>
-      <td style="font-size:11px;color:var(--faint);max-width:150px;overflow:hidden;text-overflow:ellipsis">${x.t||""}</td>
+    const bet=suggestBet(x,ev);
+    h+=`<tr><td class="num" style="font-size:12px">${x.dl||"—"}</td>
+      <td style="font-size:12px">${VENMAP[x.v]||x.v}</td><td class="num">${x.r}R</td>
       <td style="font-size:12px">${i1.name}</td><td class="num">${(i1.nat||0).toFixed(2)}</td>
       <td class="num" style="font-size:12px">${i1.grade}</td><td class="num">${ev.nA}</td>
       <td class="num" style="font-weight:500">${ev.est.toFixed(1)}%</td>
+      <td style="font-size:12px;white-space:nowrap">${bet}</td>
       <td style="font-size:11px">${tags.join(" / ")}</td></tr>`;
   });
   out.innerHTML=h+"</tbody></table>"
