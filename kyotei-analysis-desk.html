@@ -143,6 +143,7 @@ footer{margin-top:28px;font-size:12px;color:var(--faint);border-top:1px solid va
         <option value="kado">カド(4コース)が有力</option>
         <option value="aare">荒れそう(1号艇が弱い)</option>
         <option value="all">全レース</option>
+        <option value="custom">カスタム条件</option>
       </select>
       <label style="font-size:12px">並び</label>
       <select id="recoSort" class="s" onchange="renderReco()">
@@ -153,8 +154,43 @@ footer{margin-top:28px;font-size:12px;color:var(--faint);border-top:1px solid va
       </select>
       <button onclick="document.getElementById('paste3').value='';document.getElementById('recoOut').innerHTML='';document.getElementById('fileName').textContent='B******.TXT を選択、または下に貼り付け';">クリア</button>
     </div>
+    <div id="customBox" style="display:none;margin-top:8px;padding:10px 12px;background:var(--panel2);border-radius:8px">
+      <div style="font-size:11px;color:var(--faint);margin-bottom:6px">カスタム条件(空欄は無条件)</div>
+      <div class="row" style="gap:10px;flex-wrap:wrap;align-items:flex-start">
+        <span style="display:inline-flex;align-items:center;gap:3px">
+          <label style="font-size:12px">推定1着率</label>
+          <select id="cu_pos" class="s"><option value="1">①</option><option value="2">②</option><option value="3">③</option><option value="4">④</option><option value="5">⑤</option><option value="6">⑥</option></select>
+          <input type="number" id="cu_plo" placeholder="下限" style="width:56px">
+          <span style="font-size:12px;color:var(--faint)">〜</span>
+          <input type="number" id="cu_phi" placeholder="上限" style="width:56px">
+          <span style="font-size:12px;color:var(--sub)">%</span>
+        </span>
+        <span style="display:inline-flex;align-items:center;gap:3px">
+          <label style="font-size:12px">場</label>
+          <select id="cu_ven" class="s"><option value="">すべて</option></select>
+        </span>
+        <span style="display:inline-flex;align-items:center;gap:3px">
+          <label style="font-size:12px">締切</label>
+          <input type="time" id="cu_tfrom" style="width:96px">
+          <span style="font-size:12px;color:var(--faint)">〜</span>
+          <input type="time" id="cu_tto" style="width:96px">
+        </span>
+      </div>
+      <div class="row" style="gap:10px;flex-wrap:wrap;margin-top:6px;align-items:flex-start">
+        <span style="display:inline-flex;align-items:center;gap:3px">
+          <label style="font-size:12px">A級の人数</label>
+          <input type="number" id="cu_nalo" placeholder="下限" style="width:52px">
+          <span style="font-size:12px;color:var(--faint)">〜</span>
+          <input type="number" id="cu_nahi" placeholder="上限" style="width:52px">
+        </span>
+        <span style="display:inline-flex;align-items:center;gap:3px" id="cuGrades"></span>
+      </div>
+      <div class="row" style="gap:10px;flex-wrap:wrap;margin-top:6px;align-items:flex-start">
+        <span id="cuRates" style="display:flex;gap:8px;flex-wrap:wrap"></span>
+      </div>
+    </div>
     <p class="hint" id="msg3"></p>
-    <div id="recoOut" class="tblwrap" style="margin-top:8px"></div>
+    <div id="recoOut" class="tblwrap" style="margin-top:8px;max-height:70vh;overflow:auto"></div>
   </div>
 
 </section>
@@ -612,11 +648,78 @@ function suggestBet(x,ev){
   return cp(1)+'<span style="color:var(--faint)">-</span>'+p.map(cp).join("")
     +'<span style="color:var(--faint)">=</span>'+p.map(cp).join("");
 }
+function buildCustom(){
+  const g=document.getElementById("cuGrades");
+  if(g&&!g.dataset.done){
+    let h='<label style="font-size:12px">級別</label>';
+    for(let c=1;c<=6;c++){
+      h+=`<span style="display:inline-flex;align-items:center;gap:1px">
+        <span style="font-size:11px;color:var(--sub)">${c}</span>
+        <select id="cu_g${c}" class="s" style="font-size:11px;padding:2px 3px">
+          <option value="">—</option><option value="A1">A1</option><option value="A2">A2</option>
+          <option value="B1">B1</option><option value="B2">B2</option>
+          <option value="A1A2">A級</option><option value="B1B2">B級</option></select></span>`;
+    }
+    g.innerHTML=h; g.dataset.done="1";
+  }
+  const r=document.getElementById("cuRates");
+  if(r&&!r.dataset.done){
+    let h='<span style="font-size:12px;align-self:center">勝率</span>';
+    for(let c=1;c<=6;c++){
+      h+=`<span style="display:inline-flex;align-items:center;gap:1px">
+        <span style="font-size:11px;color:var(--sub)">${c}</span>
+        <input type="number" step="0.1" id="cu_rlo${c}" placeholder="下" style="width:44px;font-size:11px;padding:2px">
+        <input type="number" step="0.1" id="cu_rhi${c}" placeholder="上" style="width:44px;font-size:11px;padding:2px"></span>`;
+    }
+    r.innerHTML=h; r.dataset.done="1";
+  }
+  const v=document.getElementById("cu_ven");
+  if(v&&v.options.length<=1&&PROG.length){
+    const set=[...new Set(PROG.map(x=>x.v))].sort((a,b)=>a-b);
+    set.forEach(n=>{const o=document.createElement("option");o.value=n;o.textContent=VENMAP[n]||n;v.appendChild(o);});
+  }
+  ["cu_pos","cu_plo","cu_phi","cu_ven","cu_tfrom","cu_tto","cu_nalo","cu_nahi"].forEach(id=>{
+    const el=document.getElementById(id);
+    if(el&&!el.dataset.b){el.dataset.b="1";el.oninput=renderReco;el.onchange=renderReco;}
+  });
+  for(let c=1;c<=6;c++) ["cu_g","cu_rlo","cu_rhi"].forEach(p=>{
+    const el=document.getElementById(p+c);
+    if(el&&!el.dataset.b){el.dataset.b="1";el.oninput=renderReco;el.onchange=renderReco;}
+  });
+}
+function matchCustom(x){
+  const gv2=id=>{const e=document.getElementById(id);return e&&e.value!==""?e.value:null;};
+  const pos=+(gv2("cu_pos")||1), plo=gv2("cu_plo"), phi=gv2("cu_phi");
+  const p=x.ev.P[pos-1];
+  if(plo!==null&&p<+plo)return false;
+  if(phi!==null&&p>+phi)return false;
+  const ven=gv2("cu_ven");
+  if(ven!==null&&x.v!==+ven)return false;
+  const tf=gv2("cu_tfrom"), tt=gv2("cu_tto");
+  if((tf||tt)&&!x.dl)return false;
+  if(tf&&x.dl<tf)return false;
+  if(tt&&x.dl>tt)return false;
+  const nlo=gv2("cu_nalo"), nhi=gv2("cu_nahi");
+  if(nlo!==null&&x.ev.nA<+nlo)return false;
+  if(nhi!==null&&x.ev.nA>+nhi)return false;
+  for(let c=1;c<=6;c++){
+    const g=gv2("cu_g"+c);
+    if(g!==null&&g.indexOf(x.e[c-1].grade)<0)return false;
+    const rlo=gv2("cu_rlo"+c), rhi=gv2("cu_rhi"+c);
+    const nr=x.e[c-1].nat||0;
+    if(rlo!==null&&nr<+rlo)return false;
+    if(rhi!==null&&nr>+rhi)return false;
+  }
+  return true;
+}
 function renderReco(){
+  buildCustom();
   const out=document.getElementById("recoOut");
   if(!PROG.length){out.innerHTML="";return;}
   const mode=document.getElementById("recoMode").value;
+  document.getElementById("customBox").style.display=mode==="custom"?"":"none";
   let list=PROG.map(x=>({...x,ev:evalRace(x)}));
+  if(mode==="custom") list=list.filter(matchCustom);
   if(mode==="strong") list=list.filter(x=>x.ev.top1&&x.ev.a1);
   else if(mode==="kado") list=list.filter(x=>x.ev.kadoStrong);
   else if(mode==="aare") list=list.filter(x=>x.ev.weak1);
@@ -630,7 +733,7 @@ function renderReco(){
   let h='<table><thead><tr><th class="num">締切</th><th>場</th><th class="num">R</th>'
    +'<th>①号艇</th><th class="num">勝率</th><th>級</th><th class="num">A級</th>'
    +'<th class="num">推定イン</th><th>1着率の推定(①〜⑥)</th><th>買い目の候補</th><th>注目点</th></tr></thead><tbody>';
-  list.slice(0,40).forEach(x=>{
+  list.forEach(x=>{
     const e=x.e, i1=e[0], ev=x.ev;
     const tags=[];
     if(ev.top1&&ev.a1)tags.push('<span class="evpos">1号艇が最強</span>');
@@ -650,7 +753,7 @@ function renderReco(){
       <td style="font-size:11px">${tags.join(" / ")}</td></tr>`;
   });
   out.innerHTML=h+"</tbody></table>"
-   +`<p class="hint">${list.length}レース該当${list.length>40?"(上位40件を表示)":""}。推定イン1着率は蓄積データの実績値です(全体平均56.5%)。<br>
+   +`<p class="hint">${list.length}レース表示中(解析した全${PROG.length}レースのうち)。推定イン1着率は全体平均56.5%が基準です。<br>
    <b>「買い目の候補」はそのまま買うためのものではありません。</b>番組表だけの情報で組むと回収率は約77%(1-2-3の1点買いの80%より低い)でした。推定1着率は47,079レースで学習・較正済みのモデルによるものです(進入は枠なり想定)。
    狙うレースを絞ったら、締切前に直前情報タブで展示タイムと進入を取り込んでから組み直してください(回収率が約4ポイント改善します)。</p>`;
 }
