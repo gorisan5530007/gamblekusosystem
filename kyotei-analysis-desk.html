@@ -891,11 +891,14 @@ function parseChokuzen(){
   const im=[...raw.matchAll(/img_boat2_(\d)\.png/g)].map(x=>+x[1]);
   im.forEach(b=>{ if(b>=1&&b<=6&&!order.includes(b)) order.push(b); });
   if(order.length!==6){
-    /* 「スタート展示 コース 並び ST」以降に、艇番とSTが交互に並ぶ形式 */
+    /* 「スタート展示」以降で、艇番とSTの並びを拾う。
+       PC版は「1  .03」、モバイル版は「1.05」「6F.02」のように空白が無い形式。 */
     const si=t.indexOf("スタート展示");
     if(si>=0){
-      const seg=t.slice(si, si+600);
-      const rx=/([1-6])\s*(?:\n|\s)+\s*(F?\s*\.\d{2}|L)/g;
+      let seg=t.slice(si+6, si+600);
+      const we=seg.indexOf("水面気象情報");
+      if(we>0) seg=seg.slice(0,we);
+      const rx=/([1-6])\s*(F\s*\.\d{2}|L|\.\d{2})/g;
       const got=[]; let mm;
       while((mm=rx.exec(seg))){ const b=+mm[1]; if(!got.includes(b)) got.push(b); }
       if(got.length===6) order=got;
@@ -1546,7 +1549,7 @@ function applyForm2(head){
   for(let i=1;i<=6;i++) if(!ex.has(i)) others.push(i);
   for(const c in picked) delete picked[c];
   const list=[];
-  others.forEach(y=>{ list.push(`${h}-${p}-${y}`); list.push(`${h}-${y}-${p}`); });
+  others.forEach(y=>{ list.push(`${h}-${p_}-${y}`); list.push(`${h}-${y}-${p_}`); });
   list.forEach(c=>picked[c]=true);
   anaStake={}; const unit=gv("unit")||100;
   list.forEach(c=>anaStake[c]=unit);
