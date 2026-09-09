@@ -505,10 +505,19 @@ function setMsg(id,txt,ok){const e=document.getElementById(id);e.textContent=txt
 /* 貼り付けテキストから開催場・風を抽出(全パーサー共通) */
 function extractConditions(t){
   const out=[];
+  /* モバイル版では「鳴 門」のように文字の間にスペースが入ることがあるため、
+     空白を取り除いた文字列でも会場名を探す */
+  const flat=t.replace(/[\s\u3000]/g,"");
   let best=null,bi=Infinity;
   for(const k in V){
     let idx=t.indexOf(k);
     if(k==="津"){while(idx>0&&t[idx-1]==="唐")idx=t.indexOf(k,idx+1);}
+    if(idx===-1){
+      /* 空白除去版で探す(位置は元文字列の概算) */
+      let fi=flat.indexOf(k);
+      if(k==="津"){while(fi>0&&flat[fi-1]==="唐")fi=flat.indexOf(k,fi+1);}
+      if(fi!==-1) idx=fi*(t.length/Math.max(flat.length,1));
+    }
     if(idx!==-1&&idx<bi){bi=idx;best=k;}
   }
   if(best){document.getElementById("venue").value=best;out.push("開催場→"+best);}
