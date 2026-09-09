@@ -541,24 +541,46 @@ function extractConditions(t){
 
 function parseSyussou(){
   const t=norm(document.getElementById("paste0").value);
-  const rx=/(\d{4})\s*\/?\s*(A1|A2|B1|B2)[\s\S]{0,160}?F(\d+)\s+L\d+\s+(0\.\d{2})\s+(\d{1,2}\.\d{2})\s+(\d{1,3}\.\d{2})\s+(\d{1,3}\.\d{2})\s+(\d{1,2}\.\d{2})\s+(\d{1,3}\.\d{2})\s+(\d{1,3}\.\d{2})\s+(\d{1,3})\s+(\d{1,3}\.\d{2})\s+(\d{1,3}\.\d{2})(?:\s+(\d{1,3})\s+(\d{1,3}\.\d{2})\s+(\d{1,3}\.\d{2}))?/g;
+  /* 平均STや勝率が「-」の選手(B2級・新人など)にも対応する */
+  const ST="(?:0\\.\\d{2}|-|―)";
+  const R2="(?:\\d{1,3}\\.\\d{2}|-|―)";
+  const NO="(?:\\d{1,3}|-|―)";
+  const rx=new RegExp(
+    "(\\d{4})\\s*\\/?\\s*(A1|A2|B1|B2)[\\s\\S]{0,200}?"
+    +"F(\\d+)\\s+L\\d+\\s+"+ST+"\\s+"
+    +"("+R2+")\\s+("+R2+")\\s+("+R2+")\\s+"      /* 全国 勝率/2率/3率 */
+    +"("+R2+")\\s+("+R2+")\\s+("+R2+")\\s+"      /* 当地 勝率/2率/3率 */
+    +"("+NO+")\\s+("+R2+")\\s+("+R2+")"            /* モーター No/2率/3率 */
+    +"(?:\\s+("+NO+")\\s+("+R2+")\\s+("+R2+"))?" /* ボート No/2率/3率 */
+    ,"g");
+  const stRx=new RegExp("F\\d+\\s+L\\d+\\s+("+ST+")","g");
   const hits=[];let m;
   while((m=rx.exec(t))&&hits.length<6)hits.push(m);
+  /* 平均STは別に拾う(「-」なら空欄のまま) */
+  const sts=[];let sm;
+  while((sm=stRx.exec(t))&&sts.length<6)sts.push(sm[1]);
   if(hits.length===0){setMsg("msg0","解析できませんでした。公式出走表ページを全選択コピーして貼り付けてください。",false);return;}
+  const num=v=>(v&&v!=="-"&&v!=="―")?v:"";
+  let noST=[];
   hits.forEach((h,idx)=>{const i=idx+1;
     document.getElementById("reg"+i).value=h[1];
     document.getElementById("cls"+i).value=h[2];
     document.getElementById("f"+i).value=h[3];
-    document.getElementById("st"+i).value=h[4];
-    document.getElementById("nat"+i).value=h[5];
-    document.getElementById("loc"+i).value=h[8];
-    document.getElementById("mot"+i).value=h[12];
-    if(h[15])document.getElementById("bot"+i).value=h[15];
+    const st=num(sts[idx]);
+    document.getElementById("st"+i).value=st||"0.17";
+    if(!st)noST.push(i);
+    document.getElementById("nat"+i).value=num(h[4])||"0";
+    document.getElementById("loc"+i).value=num(h[7])||"0";
+    document.getElementById("mot"+i).value=num(h[11])||"35";
+    if(h[14])document.getElementById("bot"+i).value=num(h[14])||"30";
   });
   const dm=t.match(/[ＨH]\s*(1200|1800)\s*ｍ|[ＨH]\s*(1200|1800)m/);
   if(dm){const v=dm[1]||dm[2]; document.getElementById("dist").value=v;}
   const cond=extractConditions(t);
-  setMsg("msg0",hits.length+"艇分を取り込みました"+(hits.length<6?"(残りは手入力してください)":"")+(cond.length?" / "+cond.join("、"):""),hits.length===6);
+  let msg=hits.length+"艇分を取り込みました"+(hits.length<6?"(残りは手入力してください)":"");
+  if(noST.length)msg+=` / ${noST.join("・")}号艇は平均STが未掲載のため0.17を仮置き`;
+  if(cond.length)msg+=" / "+cond.join("、");
+  setMsg("msg0",msg,hits.length===6);
   calc();
 }
 let PROG=[];
