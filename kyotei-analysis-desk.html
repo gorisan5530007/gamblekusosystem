@@ -499,7 +499,7 @@ document.getElementById("inrows").innerHTML=rows;
 function showTab(n){for(let i=0;i<4;i++){const p=document.getElementById("pane"+i),b=document.getElementById("tab"+i);if(p)p.style.display=i===n?"":"none";if(b)b.classList.toggle("on",i===n);}}
 
 /* ── 取り込みパーサ ── */
-function norm(t){return t.replace(/[０-９．]/g,c=>String.fromCharCode(c.charCodeAt(0)-0xFEE0)).replace(/[－―ー−‐﹣]/g,"-").replace(/[：]/g,":").replace(/\u3000/g," ").replace(/\t/g," ");}
+function norm(t){return t.replace(/[０-９．]/g,c=>String.fromCharCode(c.charCodeAt(0)-0xFEE0)).replace(/[－―−‐﹣]/g,"-").replace(/[：]/g,":").replace(/\u3000/g," ").replace(/\t/g," ");}
 function setMsg(id,txt,ok){const e=document.getElementById(id);e.textContent=txt;e.className="msg "+(ok?"ok":"err");}
 
 /* 貼り付けテキストから開催場・風を抽出(全パーサー共通) */
@@ -882,8 +882,21 @@ function renderReco(){
 function parseChokuzen(){
   const raw=document.getElementById("paste1").value;
   const t=norm(raw);
-  const m=t.match(/\b[67]\.\d{2}\b/g);
-  if(!m||m.length===0){setMsg("msg1","展示タイムが見つかりませんでした。直前情報ページを貼り付けてください。",false);return;}
+  /* 展示タイムは体重(○○.○kg)の直後にある値を拾う。
+     前走成績の「6コース .04」などを誤って拾わないようにするため。 */
+  let m=[];
+  const wRx=/(\d{2}\.\d)\s*kg/g; let wm;
+  while((wm=wRx.exec(t))&&m.length<6){
+    const seg=t.slice(wm.index+wm[0].length, wm.index+wm[0].length+120);
+    const em=seg.match(/(?:^|[^\d.])([67]\.\d{2})(?![\d])/);
+    if(em) m.push(em[1]);
+  }
+  if(m.length<6){
+    /* 体重が拾えない形式は従来どおり全体から探す(範囲を絞って誤検出を減らす) */
+    const all=t.match(/\b[67]\.\d{2}\b/g)||[];
+    m=all.filter(v=>{const x=parseFloat(v);return x>=6.2&&x<=7.8;}).slice(0,6);
+  }
+  if(m.length===0){setMsg("msg1","展示タイムが見つかりませんでした。直前情報ページを貼り付けてください。",false);return;}
   const n=Math.min(6,m.length);
   for(let i=1;i<=n;i++)document.getElementById("exh"+i).value=m[i-1];
   /* スタート展示の進入。ページのソース(画像名)からも、貼り付けたテキストからも読み取る */
