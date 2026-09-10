@@ -410,6 +410,7 @@ const FANDB={"3024":["西島義則","B2",[49.5,22.8,11.1,100.0,0.0,0.0],[99.0,12
 </script>
 <script>
 const PROGM={"names":["枠1","枠2","枠3","枠4","枠5","枠6","全国勝率","勝率(相対)","当地勝率","当地未走","M2連","M2連(相対)","B2連","B2連(相対)","A1級","A2級","B1級","年齢","体重"],"w":[1.634213124778065,0.17610819220432952,0.13718383395308928,-0.06868984834739074,-0.5803079691688304,-1.298507333418859,0.5021677663525096,0.5021677718215446,0.17615238284551832,-0.10152874388563639,0.13502738408553097,0.13502743861608124,0.02202334331891845,0.022023321818521215,0.3237125193768859,0.16294550172235084,0.07575168048570101,-0.1308710452521956,0.011201487773251332]};
+const FORM2={"lo":25,"hi":45,"cut":2,"roi":81.4,"n":6710,"hit":1400,"pts":4,"note":"イン推定25〜45%で①と対抗の2艇を1・2着に、3着は残りのうち有力2艇"};
 const FORMS={"1":{"partner":2,"th":2,"cut":0,"tr":86.2,"te":84.4,"n":585,"hit":245,"pts":8.0,"conf":"高","note":"期間をまたいで安定"},"2":{"partner":3,"th":2,"cut":3,"tr":85.6,"te":105.9,"n":1299,"hit":117,"pts":2.8,"conf":"低","note":"サンプル不足・参考程度"},"3":{"partner":4,"th":1,"cut":3,"tr":79.3,"te":71.5,"n":1644,"hit":93,"pts":2.9,"conf":"低","note":"サンプル不足・参考程度"},"4":{"partner":5,"th":0,"cut":3,"tr":91.7,"te":90.0,"n":3576,"hit":213,"pts":3.9,"conf":"高","note":"期間をまたいで安定"},"5":{"partner":6,"th":2,"cut":2,"tr":86.8,"te":88.1,"n":170,"hit":10,"pts":5.5,"conf":"低","note":"サンプル不足・参考程度"}};
 const BOOST={"1":[{"lab":"自艇の勝率が最高","idx":134,"rate":74.2},{"lab":"自艇がA1級","idx":130,"rate":72.1},{"lab":"自艇がA1かつ内勢より前","idx":130,"rate":72.1}],"2":[{"lab":"内勢より2m以上前","idx":223,"rate":30.2},{"lab":"自艇の勝率が最高","idx":207,"rate":28.0},{"lab":"自艇がA1かつ内勢より前","idx":212,"rate":28.7}],"3":[{"lab":"内勢より2m以上前","idx":211,"rate":27.0},{"lab":"自艇がA1かつ内勢より前","idx":209,"rate":26.9},{"lab":"内勢より1m以上前","idx":185,"rate":23.8}],"4":[{"lab":"内勢より2m以上前","idx":302,"rate":30.5},{"lab":"内勢より1m以上前","idx":262,"rate":26.5},{"lab":"自艇がA1かつ内勢より前","idx":257,"rate":25.9}],"5":[{"lab":"自艇がA1かつ内勢より前","idx":272,"rate":16.6},{"lab":"内勢より1m以上前","idx":246,"rate":15.0},{"lab":"自艇の勝率が最高","idx":228,"rate":13.9}],"6":[{"lab":"内勢より1m以上前","idx":384,"rate":7.3},{"lab":"自艇がA1かつ内勢より前","idx":397,"rate":7.6},{"lab":"自艇の勝率が最高","idx":305,"rate":5.8}]};
 const HADJ={"波0-1cm":[[1.056,0.947,0.937],[0.936,1.033,0.972],[0.897,1.011,1.029],[0.944,1.007,1.025],[0.961,1.001,1.005],[0.898,0.956,0.992]],"波2-3cm":[[0.99,0.999,1.005],[1.004,0.987,1.024],[1.036,1.004,0.986],[1.007,1.003,0.993],[1.009,1.013,0.993],[0.976,1.003,1.005]],"波4cm以上":[[0.923,1.096,1.1],[1.103,0.969,1.001],[1.108,0.972,0.977],[1.083,0.98,0.971],[1.05,0.971,1.005],[1.229,1.071,1.005]],"追い風":[[1.031,0.98,0.986],[0.955,1.026,1.011],[0.975,1.016,1.024],[0.956,0.989,1.026],[0.956,0.997,0.981],[0.944,0.927,0.949]],"向かい風":[[1.0,0.977,0.965],[0.982,1.012,0.978],[0.974,1.011,0.994],[1.029,0.996,0.999],[1.037,1.015,1.046],[1.034,0.952,1.001]],"横風":[[0.988,1.019,1.012],[1.023,0.985,1.0],[1.018,0.993,0.997],[1.012,1.002,0.993],[0.993,0.995,0.992],[1.028,1.038,1.019]],"進入固定":[[1.261,0.892,0.715],[0.674,1.107,1.132],[0.621,1.128,1.071],[0.794,1.134,1.223],[0.626,0.765,0.908],[0.405,0.535,0.7]],"周回短縮":[[0.905,1.123,1.1],[1.189,1.025,0.972],[1.079,0.98,0.934],[1.12,0.912,1.063],[1.066,0.937,1.065],[1.099,0.991,0.902]],"枠なり":[[1.026,0.992,0.959],[0.985,1.015,1.002],[0.974,1.009,1.0],[0.955,0.994,0.995],[0.931,0.966,0.991],[0.964,1.017,1.043]],"進入変更あり":[[0.883,1.036,1.182],[1.067,0.933,0.992],[1.116,0.961,1.001],[1.201,1.026,1.022],[1.304,1.153,1.038],[1.162,0.924,0.808]]};
@@ -1543,6 +1544,42 @@ function formOrder(){
   if(!window.__turnOrder)return null;
   return window.__turnOrder;
 }
+function applyRival(){
+  if(!curPos||!curTri.length)return;
+  const note=document.getElementById("formNote");
+  const crs=[]; for(let i=1;i<=6;i++)crs.push(parseInt(document.getElementById("crs"+i).value));
+  const i1=crs.indexOf(1)+1;                    /* 1コースに入る艇 */
+  if(!i1){ note.textContent="1コースの艇が特定できません"; return; }
+  const est=curPos[0][i1-1]*100;                /* インの推定1着率 */
+  /* 対抗 = インを除いて1着率が最も高い艇 */
+  let rv=0,best=-1;
+  for(let i=1;i<=6;i++){ if(i===i1)continue; if(curPos[0][i-1]>best){best=curPos[0][i-1];rv=i;} }
+  /* 3着候補 = 残り4艇のうち1着率が高い上位2艇 */
+  const rest=[];
+  for(let i=1;i<=6;i++) if(i!==i1&&i!==rv) rest.push(i);
+  rest.sort((a,b)=>curPos[0][b-1]-curPos[0][a-1]);
+  const keep=rest.slice(0,4-FORM2.cut), cut=rest.slice(4-FORM2.cut);
+  for(const c in picked) delete picked[c];
+  const list=[];
+  keep.forEach(y=>{ list.push(`${i1}-${rv}-${y}`); list.push(`${rv}-${i1}-${y}`); });
+  anaStake={}; const unit=gv("unit")||100;
+  list.forEach(c=>{picked[c]=true; anaStake[c]=unit;});
+  const chip=i=>`<span class="chip" style="width:20px;height:20px;font-size:12px;background:${BC[i-1]};color:${BT[i-1]}">${i}</span>`;
+  const dead=i=>`<span class="chip" style="width:20px;height:20px;font-size:12px;background:var(--field);color:var(--faint);border:1px solid var(--line);text-decoration:line-through">${i}</span>`;
+  const sep=t=>`<span style="color:var(--faint);margin:0 3px;font-size:14px">${t}</span>`;
+  const inRange=est>=FORM2.lo&&est<FORM2.hi;
+  note.innerHTML=
+    `<div class="row" style="gap:2px;align-items:center;flex-wrap:wrap">
+       ${chip(i1)}${chip(rv)}${sep("-")}${chip(i1)}${chip(rv)}${sep("=")}${keep.map(chip).join("")}
+       <span style="font-size:12px;color:var(--sub);margin-left:8px">${list.length}点</span>
+     </div>
+     <div style="margin-top:6px"><span style="font-size:11px;color:var(--faint)">切った艇(1着率が下位)</span> ${cut.map(dead).join(" ")}</div>
+     <div style="margin-top:6px;font-size:11px;color:${inRange?"var(--sub)":"var(--neg)"}">
+       インの推定1着率 ${est.toFixed(1)}% — ${inRange
+         ? `適用条件(${FORM2.lo}〜${FORM2.hi}%)に合致。検証: 回収率${FORM2.roi}%(${FORM2.n.toLocaleString()}レース・的中20.9%)`
+         : `適用条件は${FORM2.lo}〜${FORM2.hi}%です。この形の検証はその範囲でのものなので、参考程度に見てください`}</div>`;
+  renderTri();
+}
 function applyForm2(head){
   const f=FORMS[head]; if(!f)return;
   const crs=[]; for(let i=1;i<=6;i++)crs.push(parseInt(document.getElementById("crs"+i).value));
@@ -1596,7 +1633,9 @@ function renderFormBtns(){
     const f=FORMS[c];
     const cl=f.conf==="高"?"primary":"";
     return `<button class="${cl}" onclick="applyForm2(${c})" title="回収率${f.te}% / 信頼度${f.conf}">${c}→${f.partner}</button>`;
-  }).join("")+'<span style="font-size:11px;color:var(--faint);align-self:center;margin-left:6px">濃い色=信頼度が高い形</span>';
+  }).join("")
+   +`<button class="primary" onclick="applyRival()" title="回収率${FORM2.roi}% / ${FORM2.n}レース">①対抗の2頭流し</button>`
+   +'<span style="font-size:11px;color:var(--faint);align-self:center;margin-left:6px">濃い色=信頼度が高い形</span>';
   el.dataset.done="1";
 }
 function applyAna(){
