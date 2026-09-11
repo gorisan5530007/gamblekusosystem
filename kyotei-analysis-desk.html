@@ -349,6 +349,18 @@ footer{margin-top:28px;font-size:12px;color:var(--faint);border-top:1px solid va
     <button onclick="applyTopK()" class="primary">この個数で選ぶ</button>
     <span id="tkInfo" style="font-size:12px;color:var(--sub)"></span>
   </div>
+  <div class="row" style="margin-bottom:8px;padding:10px 12px;background:var(--panel2);border-radius:8px;align-items:flex-start">
+    <span style="font-size:12px;color:var(--sub);padding-top:6px">おまかせ</span>
+    <div style="flex:1">
+      <div class="row" style="gap:6px">
+        <label style="font-size:12px">予算</label>
+        <input type="number" id="autoBudget" value="3000" min="200" step="100" style="width:78px" oninput="applyAuto()">
+        <span style="font-size:12px;color:var(--sub)">円</span>
+        <button class="primary" onclick="applyAuto()">レースに合わせて自動で選ぶ</button>
+      </div>
+      <p class="hint" id="autoNote" style="margin:6px 0 0"></p>
+    </div>
+  </div>
   <div class="row" style="margin-bottom:8px;padding:8px 10px;background:var(--panel2);border-radius:8px;align-items:flex-start">
     <span style="font-size:12px;color:var(--sub);padding-top:4px">検証済みの形</span>
     <div>
@@ -432,6 +444,7 @@ const FANDB={"3024":["西島義則","B2",[49.5,22.8,11.1,100.0,0.0,0.0],[99.0,12
 </script>
 <script>
 const PROGM={"names":["枠1","枠2","枠3","枠4","枠5","枠6","全国勝率","勝率(相対)","当地勝率","当地未走","M2連","M2連(相対)","B2連","B2連(相対)","A1級","A2級","B1級","年齢","体重"],"w":[1.634213124778065,0.17610819220432952,0.13718383395308928,-0.06868984834739074,-0.5803079691688304,-1.298507333418859,0.5021677663525096,0.5021677718215446,0.17615238284551832,-0.10152874388563639,0.13502738408553097,0.13502743861608124,0.02202334331891845,0.022023321818521215,0.3237125193768859,0.16294550172235084,0.07575168048570101,-0.1308710452521956,0.011201487773251332]};
+const AUTORULE={"カド先行":{"n":10,"roi":79.6,"hit":41.1,"races":1012},"イン凹み":{"n":12,"roi":80.4,"hit":46.3,"races":2381},"進入固定×穏やか":{"n":2,"roi":76.2,"hit":24.4,"races":254},"イン堅い":{"n":2,"roi":84.6,"hit":23.6,"races":2042},"大荒れ想定":{"n":3,"roi":86.7,"hit":16.2,"races":2600},"標準":{"n":2,"roi":86.7,"hit":20.0,"races":8850}};
 const FORM2={"lo":25,"hi":45,"cut":2,"roi":81.4,"n":6710,"hit":1400,"pts":4,"note":"イン推定25〜45%で①と対抗の2艇を1・2着に、3着は残りのうち有力2艇"};
 const FORMS={"1":{"partner":2,"th":2,"cut":0,"tr":86.2,"te":84.4,"n":585,"hit":245,"pts":8.0,"conf":"高","note":"期間をまたいで安定"},"2":{"partner":3,"th":2,"cut":3,"tr":85.6,"te":105.9,"n":1299,"hit":117,"pts":2.8,"conf":"低","note":"サンプル不足・参考程度"},"3":{"partner":4,"th":1,"cut":3,"tr":79.3,"te":71.5,"n":1644,"hit":93,"pts":2.9,"conf":"低","note":"サンプル不足・参考程度"},"4":{"partner":5,"th":0,"cut":3,"tr":91.7,"te":90.0,"n":3576,"hit":213,"pts":3.9,"conf":"高","note":"期間をまたいで安定"},"5":{"partner":6,"th":2,"cut":2,"tr":86.8,"te":88.1,"n":170,"hit":10,"pts":5.5,"conf":"低","note":"サンプル不足・参考程度"}};
 const BOOST={"1":[{"lab":"自艇の勝率が最高","idx":134,"rate":74.2},{"lab":"自艇がA1級","idx":130,"rate":72.1},{"lab":"自艇がA1かつ内勢より前","idx":130,"rate":72.1}],"2":[{"lab":"内勢より2m以上前","idx":223,"rate":30.2},{"lab":"自艇の勝率が最高","idx":207,"rate":28.0},{"lab":"自艇がA1かつ内勢より前","idx":212,"rate":28.7}],"3":[{"lab":"内勢より2m以上前","idx":211,"rate":27.0},{"lab":"自艇がA1かつ内勢より前","idx":209,"rate":26.9},{"lab":"内勢より1m以上前","idx":185,"rate":23.8}],"4":[{"lab":"内勢より2m以上前","idx":302,"rate":30.5},{"lab":"内勢より1m以上前","idx":262,"rate":26.5},{"lab":"自艇がA1かつ内勢より前","idx":257,"rate":25.9}],"5":[{"lab":"自艇がA1かつ内勢より前","idx":272,"rate":16.6},{"lab":"内勢より1m以上前","idx":246,"rate":15.0},{"lab":"自艇の勝率が最高","idx":228,"rate":13.9}],"6":[{"lab":"内勢より1m以上前","idx":384,"rate":7.3},{"lab":"自艇がA1かつ内勢より前","idx":397,"rate":7.6},{"lab":"自艇の勝率が最高","idx":305,"rate":5.8}]};
@@ -1427,6 +1440,7 @@ function renderSlit(crs){
   const turn=behind.map((b,i)=>-b+INNER_M[crs[i]-1]);
   const order=[0,1,2,3,4,5].sort((a,b)=>turn[b]-turn[a]);
   window.__turnOrder=order.map(i=>crs[i]);
+  window.__slitPos=behind.map(b=>-b);
   let h=panel("スリット隊形予想 — コース別ST実績×F補正。右ほど行き足先行",slitCells);
   h+=panel("1マーク直前・スタートから150m地点 — 展示タイム(直線150m)から速度を逆算。↑=スリットからの伸び返し",mCells);
   h+='<div style="font-size:11px;color:var(--faint);letter-spacing:.08em;margin:12px 0 6px">1マーク先取り予想 — 150m地点の差+内外の位置取り</div>';
@@ -1623,6 +1637,75 @@ function formOrder(){
   /* 1マーク先取り順(コース番号) — 隊形計算と同じ指標 */
   if(!window.__turnOrder)return null;
   return window.__turnOrder;
+}
+function classifyRace(){
+  /* これまでの検証で有効だった指標でレースを分類する */
+  if(!curPos)return null;
+  const crs=[]; for(let i=1;i<=6;i++)crs.push(parseInt(document.getElementById("crs"+i).value));
+  const byC={}; crs.forEach((c,i)=>byC[c]=i+1);
+  const i1=byC[1];
+  const est=i1?curPos[0][i1-1]*100:56;
+  /* 1マーク先取り位置(隊形計算と同じ値) */
+  const pos=window.__slitPos||null;
+  let lead4=null,dip1=null;
+  if(pos){
+    const p=c=>{const l=byC[c];return l?pos[l-1]:null;};
+    const p4=p(4);
+    if(p4!==null){
+      const inn=[1,2,3].map(p).filter(v=>v!==null);
+      if(inn.length) lead4=p4-Math.max(...inn);
+    }
+    const pi=p(1);
+    if(pi!==null){
+      const outs=[3,4,5,6].map(p).filter(v=>v!==null);
+      if(outs.length) dip1=Math.max(...outs)-pi;
+    }
+  }
+  const fix=document.getElementById("fixedEntry");
+  const calm=gv("wspd")<=3&&gv("wave")<=2;
+  let lab="標準";
+  if(lead4!==null&&lead4>=1) lab="カド先行";
+  else if(dip1!==null&&dip1>=2) lab="イン凹み";
+  else if(fix&&fix.checked&&calm) lab="進入固定×穏やか";
+  else if(est>=65) lab="イン堅い";
+  else if(est<35) lab="大荒れ想定";
+  return {lab:lab,est:est,lead4:lead4,dip1:dip1};
+}
+function applyAuto(){
+  if(!curTri.length){document.getElementById("autoNote").textContent="先に出走表を取り込んでください";return;}
+  const cl=classifyRace();
+  if(!cl){document.getElementById("autoNote").textContent="判定できませんでした";return;}
+  const r=AUTORULE[cl.lab]||{n:8,roi:83,hit:45,races:0};
+  const B=Math.max(200,gv("autoBudget")||3000);
+  const top=curTri.slice(0,r.n);
+  const s=top.reduce((a,t)=>a+t.pr,0);
+  const bets=top.map(t=>[t.c,Math.max(100,Math.round(B*t.pr/s/100)*100)]);
+  let used=bets.reduce((a,b)=>a+b[1],0), i=0;
+  while(used>B&&i<bets.length*4){
+    const j=i%bets.length;
+    if(bets[j][1]>100){bets[j][1]-=100;used-=100;}
+    i++;
+  }
+  for(const c in picked) delete picked[c];
+  anaStake={};
+  bets.forEach(([c,a])=>{picked[c]=true; anaStake[c]=a;});
+  const prob=top.reduce((a,t)=>a+t.pr,0)*100;
+  const chip=i=>`<span class="chip" style="width:19px;height:19px;font-size:11px;background:${BC[i-1]};color:${BT[i-1]}">${i}</span>`;
+  const rows=bets.map(([c,a])=>{
+    const [x,y,z]=c.split("-").map(Number);
+    return `<span style="display:inline-flex;align-items:center;gap:2px;margin:0 12px 5px 0;white-space:nowrap">`
+      +chip(x)+chip(y)+chip(z)+`<span style="font-size:11px;color:var(--sub);margin-left:3px">${a}円</span></span>`;
+  }).join("");
+  let why=`インの推定1着率 ${cl.est.toFixed(1)}%`;
+  if(cl.lead4!==null&&cl.lab==="カド先行") why+=` / 4コースが内勢より${cl.lead4.toFixed(1)}m前`;
+  if(cl.dip1!==null&&cl.lab==="イン凹み") why+=` / 1コースが外勢より${cl.dip1.toFixed(1)}m凹む`;
+  document.getElementById("autoNote").innerHTML=
+    `<b>${cl.lab}</b> と判定 → <b>${bets.length}点</b>に${used.toLocaleString()}円を配分`
+    +`<br><span style="color:var(--sub)">${why}</span>`
+    +`<div style="margin-top:7px">${rows}</div>`
+    +`<span style="color:var(--sub)">モデル的中確率 ${prob.toFixed(1)}%`
+    +(r.races?` ／ 蓄積データの検証: 回収率${r.roi}%・的中${r.hit}%(${r.races.toLocaleString()}レース)`:"")+`</span>`;
+  renderTri();
 }
 function applyRival(){
   if(!curPos||!curTri.length)return;
