@@ -319,6 +319,12 @@ footer{margin-top:28px;font-size:12px;color:var(--faint);border-top:1px solid va
 </section>
 
 <section class="panel">
+  <h2><span class="en">UPSET</span>万舟の出やすさ</h2>
+  <p class="hint" style="margin-top:-4px">配当1万円以上(万舟券)の発生率を、蓄積データ約5.2万レースから算出。全体平均は16.3%。</p>
+  <div id="manshuOut"></div>
+</section>
+
+<section class="panel">
   <h2><span class="en">TICKETS</span>三連単 — 買い目の統計的な価値</h2>
   <p class="hint" style="margin-top:-4px">蓄積した約5.4万レースの実績から、その買い目が過去どれだけ払い戻されたかを表示します。<br>
   「合成オッズ」は選んだ買い目全体を1つの賭けとみなしたときの倍率(投資額に対する、的中時の期待払戻)。オッズを取り込むと計算されます。<br>
@@ -444,6 +450,7 @@ const FANDB={"3024":["西島義則","B2",[49.5,22.8,11.1,100.0,0.0,0.0],[99.0,12
 </script>
 <script>
 const PROGM={"names":["枠1","枠2","枠3","枠4","枠5","枠6","全国勝率","勝率(相対)","当地勝率","当地未走","M2連","M2連(相対)","B2連","B2連(相対)","A1級","A2級","B1級","年齢","体重"],"w":[1.634213124778065,0.17610819220432952,0.13718383395308928,-0.06868984834739074,-0.5803079691688304,-1.298507333418859,0.5021677663525096,0.5021677718215446,0.17615238284551832,-0.10152874388563639,0.13502738408553097,0.13502743861608124,0.02202334331891845,0.022023321818521215,0.3237125193768859,0.16294550172235084,0.07575168048570101,-0.1308710452521956,0.011201487773251332]};
+const MANSHU={"base":16.3,"venue":{"丸亀":16.3,"多摩川":17.4,"徳山":15.3,"三国":18.2,"尼崎":14.1,"宮島":17.5,"若松":14.9,"桐生":17.9,"大村":15.1,"戸田":17.8,"平和島":16.8,"児島":18.1,"住之江":16.9,"蒲郡":14.5,"下関":14.0,"鳴門":18.9,"浜名湖":16.2,"唐津":14.9,"常滑":16.3,"江戸川":18.1,"福岡":13.1,"びわこ":17.0,"津":16.1,"芦屋":16.3},"wind":[15.3,16.1,17.1,18.3],"wave":[15.4,16.5,17.1,19.1],"fix":11.1,"norm":16.4};
 const FORMR={"標準":{"f":[2,4,4],"roi":79.6,"hit":51.3,"syn":1.9,"man":51,"o100":69.7,"n":5286},"イン堅い":{"f":[2,3,4],"roi":77.8,"hit":41.3,"syn":2.4,"man":20,"o100":55.9,"n":5286},"大荒れ想定":{"f":[3,4,4],"roi":78.6,"hit":57.6,"syn":1.7,"man":120,"o100":88.1,"n":5286},"カド先行":{"f":[3,4,4],"roi":78.6,"hit":57.6,"syn":1.7,"man":120,"o100":88.1,"n":5286},"イン凹み":{"f":[3,4,5],"roi":74.8,"hit":68.3,"syn":1.4,"man":185,"o100":98.5,"n":5286},"進入固定×穏やか":{"f":[2,3,4],"roi":77.8,"hit":41.3,"syn":2.4,"man":20,"o100":55.9,"n":5286}};
 const AUTORULE={"カド先行":{"n":10,"roi":79.6,"hit":41.1,"races":1012},"イン凹み":{"n":12,"roi":80.4,"hit":46.3,"races":2381},"進入固定×穏やか":{"n":2,"roi":76.2,"hit":24.4,"races":254},"イン堅い":{"n":2,"roi":84.6,"hit":23.6,"races":2042},"大荒れ想定":{"n":3,"roi":86.7,"hit":16.2,"races":2600},"標準":{"n":2,"roi":86.7,"hit":20.0,"races":8850}};
 const FORM2={"lo":25,"hi":45,"cut":2,"roi":81.4,"n":6710,"hit":1400,"pts":4,"note":"イン推定25〜45%で①と対抗の2艇を1・2着に、3着は残りのうち有力2艇"};
@@ -1273,6 +1280,39 @@ function histAdjust(){
   });
   return {m:m,on:on};
 }
+function renderManshu(){
+  const el=document.getElementById("manshuOut");
+  if(!el||typeof MANSHU==="undefined")return;
+  const ven=document.getElementById("venue").value;
+  const ws=gv("wspd"), wv=gv("wave");
+  const fx=document.getElementById("fixedEntry");
+  const vr=MANSHU.venue[ven];
+  const wr=ws<=1?MANSHU.wind[0]:(ws<=3?MANSHU.wind[1]:(ws<=5?MANSHU.wind[2]:MANSHU.wind[3]));
+  const wvr=wv<=1?MANSHU.wave[0]:(wv<=3?MANSHU.wave[1]:(wv<=6?MANSHU.wave[2]:MANSHU.wave[3]));
+  const fr=(fx&&fx.checked)?MANSHU.fix:MANSHU.norm;
+  const rows=[
+    ["開催場 "+(ven||"—"), vr],
+    ["風速 "+ws+"m", wr],
+    ["波高 "+wv+"cm", wvr],
+    [(fx&&fx.checked)?"進入固定":"通常(前づけの可能性あり)", fr],
+  ];
+  const avg=(vr!==undefined?vr:MANSHU.base)*0.25+wr*0.25+wvr*0.25+fr*0.25;
+  const cl=v=>v>=MANSHU.base+2?"evpos":(v<=MANSHU.base-2?"evneg":"");
+  let h='<div class="row" style="gap:16px;flex-wrap:wrap;align-items:flex-end">';
+  rows.forEach(([lab,v])=>{
+    const val=v!==undefined?v:MANSHU.base;
+    h+=`<div><div style="font-size:11px;color:var(--faint)">${lab}</div>
+      <div class="num ${cl(val)}" style="font-size:20px;font-weight:600">${val.toFixed(1)}%</div></div>`;
+  });
+  h+=`<div style="border-left:1px solid var(--line);padding-left:16px">
+    <div style="font-size:11px;color:var(--faint)">このレースの総合目安</div>
+    <div class="num ${cl(avg)}" style="font-size:24px;font-weight:700">${avg.toFixed(1)}%</div></div>`;
+  h+='</div>';
+  h+=`<p class="hint" style="margin-top:8px">基準(全体平均) ${MANSHU.base}%。数値は各条件を単独で見た万舟率で、組み合わせた場合の実測ではありません。`
+    +`決まり手では「逃げ」が3.5%、「まくり差し」が36.5%と最大10倍の差があり、これは事前には分かりません。`
+    +`ここに出せるのは、荒れやすさの傾向であって予言ではない、という点にご留意ください。</p>`;
+  el.innerHTML=h;
+}
 function renderHist(){
   if(typeof HIST==="undefined")return;
   const [key,wlab,ven]=histKey();
@@ -1392,6 +1432,7 @@ function calc(){
   renderExa(p);
   renderRC(crs);
   renderHist();
+  renderManshu();
   renderTenkai();
   if(Object.keys(picked).length===0)applyForm();
   autoSave();
