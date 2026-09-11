@@ -444,6 +444,7 @@ const FANDB={"3024":["西島義則","B2",[49.5,22.8,11.1,100.0,0.0,0.0],[99.0,12
 </script>
 <script>
 const PROGM={"names":["枠1","枠2","枠3","枠4","枠5","枠6","全国勝率","勝率(相対)","当地勝率","当地未走","M2連","M2連(相対)","B2連","B2連(相対)","A1級","A2級","B1級","年齢","体重"],"w":[1.634213124778065,0.17610819220432952,0.13718383395308928,-0.06868984834739074,-0.5803079691688304,-1.298507333418859,0.5021677663525096,0.5021677718215446,0.17615238284551832,-0.10152874388563639,0.13502738408553097,0.13502743861608124,0.02202334331891845,0.022023321818521215,0.3237125193768859,0.16294550172235084,0.07575168048570101,-0.1308710452521956,0.011201487773251332]};
+const FORMR={"標準":{"f":[2,4,4],"roi":79.6,"hit":51.3,"syn":1.9,"man":51,"o100":69.7,"n":5286},"イン堅い":{"f":[2,3,4],"roi":77.8,"hit":41.3,"syn":2.4,"man":20,"o100":55.9,"n":5286},"大荒れ想定":{"f":[3,4,4],"roi":78.6,"hit":57.6,"syn":1.7,"man":120,"o100":88.1,"n":5286},"カド先行":{"f":[3,4,4],"roi":78.6,"hit":57.6,"syn":1.7,"man":120,"o100":88.1,"n":5286},"イン凹み":{"f":[3,4,5],"roi":74.8,"hit":68.3,"syn":1.4,"man":185,"o100":98.5,"n":5286},"進入固定×穏やか":{"f":[2,3,4],"roi":77.8,"hit":41.3,"syn":2.4,"man":20,"o100":55.9,"n":5286}};
 const AUTORULE={"カド先行":{"n":10,"roi":79.6,"hit":41.1,"races":1012},"イン凹み":{"n":12,"roi":80.4,"hit":46.3,"races":2381},"進入固定×穏やか":{"n":2,"roi":76.2,"hit":24.4,"races":254},"イン堅い":{"n":2,"roi":84.6,"hit":23.6,"races":2042},"大荒れ想定":{"n":3,"roi":86.7,"hit":16.2,"races":2600},"標準":{"n":2,"roi":86.7,"hit":20.0,"races":8850}};
 const FORM2={"lo":25,"hi":45,"cut":2,"roi":81.4,"n":6710,"hit":1400,"pts":4,"note":"イン推定25〜45%で①と対抗の2艇を1・2着に、3着は残りのうち有力2艇"};
 const FORMS={"1":{"partner":2,"th":2,"cut":0,"tr":86.2,"te":84.4,"n":585,"hit":245,"pts":8.0,"conf":"高","note":"期間をまたいで安定"},"2":{"partner":3,"th":2,"cut":3,"tr":85.6,"te":105.9,"n":1299,"hit":117,"pts":2.8,"conf":"低","note":"サンプル不足・参考程度"},"3":{"partner":4,"th":1,"cut":3,"tr":79.3,"te":71.5,"n":1644,"hit":93,"pts":2.9,"conf":"低","note":"サンプル不足・参考程度"},"4":{"partner":5,"th":0,"cut":3,"tr":91.7,"te":90.0,"n":3576,"hit":213,"pts":3.9,"conf":"高","note":"期間をまたいで安定"},"5":{"partner":6,"th":2,"cut":2,"tr":86.8,"te":88.1,"n":170,"hit":10,"pts":5.5,"conf":"低","note":"サンプル不足・参考程度"}};
@@ -1672,39 +1673,48 @@ function classifyRace(){
   return {lab:lab,est:est,lead4:lead4,dip1:dip1};
 }
 function applyAuto(){
-  if(!curTri.length){document.getElementById("autoNote").textContent="先に出走表を取り込んでください";return;}
+  if(!curTri.length||!curPos){document.getElementById("autoNote").textContent="先に出走表を取り込んでください";return;}
   const cl=classifyRace();
   if(!cl){document.getElementById("autoNote").textContent="判定できませんでした";return;}
-  const r=AUTORULE[cl.lab]||{n:8,roi:83,hit:45,races:0};
+  const r=FORMR[cl.lab]||FORMR["標準"];
   const B=Math.max(200,gv("autoBudget")||3000);
-  const top=curTri.slice(0,r.n);
-  const s=top.reduce((a,t)=>a+t.pr,0);
-  const bets=top.map(t=>[t.c,Math.max(100,Math.round(B*t.pr/s/100)*100)]);
-  let used=bets.reduce((a,b)=>a+b[1],0), i=0;
-  while(used>B&&i<bets.length*4){
-    const j=i%bets.length;
-    if(bets[j][1]>100){bets[j][1]-=100;used-=100;}
-    i++;
-  }
+  const [n1,n2,n3]=r.f;
+  const rank=v=>[0,1,2,3,4,5].sort((a,b)=>v[b]-v[a]);
+  const A=rank(curPos[0]).slice(0,n1), Bo=rank(curPos[1]).slice(0,n2), Cc=rank(curPos[2]).slice(0,n3);
+  const list=[];
+  A.forEach(a=>Bo.forEach(b=>Cc.forEach(c=>{
+    if(a===b||b===c||a===c)return;
+    list.push(`${a+1}-${b+1}-${c+1}`);
+  })));
+  if(!list.length){document.getElementById("autoNote").textContent="買い目を作れませんでした";return;}
+  /* 予算を超えないよう切り捨てる */
+  const each=Math.max(100,Math.floor(B/list.length/100)*100);
   for(const c in picked) delete picked[c];
   anaStake={};
-  bets.forEach(([c,a])=>{picked[c]=true; anaStake[c]=a;});
-  const prob=top.reduce((a,t)=>a+t.pr,0)*100;
-  const chip=i=>`<span class="chip" style="width:19px;height:19px;font-size:11px;background:${BC[i-1]};color:${BT[i-1]}">${i}</span>`;
-  const rows=bets.map(([c,a])=>{
-    const [x,y,z]=c.split("-").map(Number);
-    return `<span style="display:inline-flex;align-items:center;gap:2px;margin:0 12px 5px 0;white-space:nowrap">`
-      +chip(x)+chip(y)+chip(z)+`<span style="font-size:11px;color:var(--sub);margin-left:3px">${a}円</span></span>`;
-  }).join("");
+  list.forEach(c=>{picked[c]=true; anaStake[c]=each;});
+  const cost=each*list.length;
+  let prob=0;
+  list.forEach(c=>{const t=curTri.find(x=>x.c===c); if(t)prob+=t.pr;});
+  const chip=i=>`<span class="chip" style="width:20px;height:20px;font-size:12px;background:${BC[i]};color:${BT[i]}">${i+1}</span>`;
   let why=`インの推定1着率 ${cl.est.toFixed(1)}%`;
-  if(cl.lead4!==null&&cl.lab==="カド先行") why+=` / 4コースが内勢より${cl.lead4.toFixed(1)}m前`;
-  if(cl.dip1!==null&&cl.lab==="イン凹み") why+=` / 1コースが外勢より${cl.dip1.toFixed(1)}m凹む`;
+  if(cl.lab==="カド先行"&&cl.lead4!==null) why+=` / 4コースが内勢より${cl.lead4.toFixed(1)}m前`;
+  if(cl.lab==="イン凹み"&&cl.dip1!==null) why+=` / 1コースが外勢より${cl.dip1.toFixed(1)}m凹む`;
   document.getElementById("autoNote").innerHTML=
-    `<b>${cl.lab}</b> と判定 → <b>${bets.length}点</b>に${used.toLocaleString()}円を配分`
-    +`<br><span style="color:var(--sub)">${why}</span>`
-    +`<div style="margin-top:7px">${rows}</div>`
-    +`<span style="color:var(--sub)">モデル的中確率 ${prob.toFixed(1)}%`
-    +(r.races?` ／ 蓄積データの検証: 回収率${r.roi}%・的中${r.hit}%(${r.races.toLocaleString()}レース)`:"")+`</span>`;
+    `<b>${cl.lab}</b> と判定 → フォーメーション <b>${n1}-${n2}-${n3}</b>`
+    +`<div class="row" style="gap:3px;align-items:center;flex-wrap:wrap;margin-top:7px">
+        <span style="font-size:12px;color:var(--sub)">1着</span>${A.map(chip).join("")}
+        <span style="color:var(--faint);margin:0 2px">-</span>
+        <span style="font-size:12px;color:var(--sub)">2着</span>${Bo.map(chip).join("")}
+        <span style="color:var(--faint);margin:0 2px">-</span>
+        <span style="font-size:12px;color:var(--sub)">3着</span>${Cc.map(chip).join("")}
+      </div>`
+    +`<div style="margin-top:6px;font-size:12px">${list.length}点 × ${each}円 = ${cost.toLocaleString()}円`
+    +(cost>B?`<span class="evneg" style="font-size:11px">(予算${B.toLocaleString()}円を超えています)</span>`:"")
+    +`　<span style="color:var(--sub)">モデル的中確率 ${(prob*100).toFixed(1)}%</span></div>`
+    +`<div style="margin-top:4px;font-size:11px;color:var(--sub)">${why}</div>`
+    +`<div style="margin-top:4px;font-size:11px;color:var(--faint)">`
+    +`蓄積データの検証: 回収率${r.roi}% / 的中${r.hit}% / 合成${r.syn}倍 / 万舟${r.man}回 / 100倍超を含む${r.o100}%`
+    +`(${r.n.toLocaleString()}レース)</div>`;
   renderTri();
 }
 function applyRival(){
