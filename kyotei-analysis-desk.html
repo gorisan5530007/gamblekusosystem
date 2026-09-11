@@ -218,6 +218,11 @@ footer{margin-top:28px;font-size:12px;color:var(--faint);border-top:1px solid va
   <h2><span class="en">CONDITIONS</span>レース条件</h2>
   <div class="row" style="margin-bottom:12px">
     <label>開催場</label><select id="venue" onchange="calc()"></select>
+    <label style="margin-left:6px">R</label>
+    <select id="rno" onchange="autoSave()" style="width:62px">
+      <option value="">—</option><option>1</option><option>2</option><option>3</option><option>4</option>
+      <option>5</option><option>6</option><option>7</option><option>8</option><option>9</option>
+      <option>10</option><option>11</option><option>12</option></select>
     <label style="margin-left:10px">風向</label>
     <span id="windpick" class="row" style="gap:2px"></span>
     <input type="hidden" id="wdir" value="none">
@@ -390,6 +395,23 @@ footer{margin-top:28px;font-size:12px;color:var(--faint);border-top:1px solid va
     <tbody id="tri"></tbody>
   </table>
   </div>
+  <div class="row" style="margin-top:10px;padding:10px 12px;background:var(--panel2);border-radius:8px;align-items:flex-start">
+    <div style="flex:1">
+      <div class="row" style="margin-bottom:6px">
+        <span style="font-size:12px;color:var(--sub)">予想を書き出す</span>
+        <select id="predFmt" class="s" onchange="makePred()">
+          <option value="plain">テキスト(SNS・note向け)</option>
+          <option value="short">短文(1行)</option>
+        </select>
+        <button class="primary" onclick="makePred()">作成</button>
+        <button onclick="copyPred()">コピー</button>
+        <span id="predMsg" style="font-size:12px;color:var(--pos)"></span>
+      </div>
+      <textarea id="predOut" style="min-height:120px;font-family:ui-monospace,monospace;font-size:12px"
+        placeholder="買い目を選んでから「作成」を押してください"></textarea>
+    </div>
+  </div>
+
   <h2 style="margin-top:20px"><span class="en">EXACTA</span>二連単 上位8点(参考)</h2>
   <div class="tblwrap">
   <table>
@@ -586,6 +608,8 @@ function parseSyussou(){
   });
   const dm=t.match(/[ＨH]\s*(1200|1800)\s*ｍ|[ＨH]\s*(1200|1800)m/);
   if(dm){const v=dm[1]||dm[2]; document.getElementById("dist").value=v;}
+  const rm=t.match(/(\d{1,2})\s*R\s*[　\s]*(?:締切|レース)/)||t.match(/^\s*(\d{1,2})R/m);
+  if(rm){const v=+rm[1]; if(v>=1&&v<=12)document.getElementById("rno").value=String(v);}
   const cond=extractConditions(t);
   let msg=hits.length+"艇分を取り込みました"+(hits.length<6?"(残りは手入力してください)":"");
   if(noST.length)msg+=` / ${noST.join("・")}号艇は平均STが未掲載のため0.17を仮置き`;
@@ -758,6 +782,62 @@ function makeNote(){
    +`\n※当たることを保証するものではありません。予算を決めてお楽しみください。`;
   document.getElementById("noteOut").value=t;
   setMsg("msg3",`${list.length}件を書き出しました`,true);
+}
+function makePred(){
+  const sel=Object.keys(picked).filter(c=>picked[c]);
+  if(!sel.length){document.getElementById("predOut").value="買い目が選ばれていません";return;}
+  const unit=gv("unit")||100;
+  const ven=document.getElementById("venue").value||"";
+  const rno=document.getElementById("rno").value||"";
+  const head=(ven||rno)?`${ven}${rno?" "+rno+"R":""}`:"レース";
+  /* 並びは三連単の確率順 */
+  const ord=curTri.filter(t=>picked[t.c]).map(t=>t.c);
+  const rest=sel.filter(c=>!ord.includes(c));
+  const list=ord.concat(rest);
+  let cost=0, prob=0;
+  list.forEach(c=>{
+    cost+=anaStake[c]||unit;
+    const t=curTri.find(x=>x.c===c); if(t)prob+=t.pr;
+  });
+  /* 合成オッズ */
+  let syn=null, okAll=true, wsum=0, psum=0;
+  list.forEach(c=>{
+    const o=parseFloat(oddsMap[c]);
+    if(!(o>0)){okAll=false;return;}
+    const st=anaStake[c]||unit;
+    const t=curTri.find(x=>x.c===c);
+    if(t){wsum+=t.pr*o*st; psum+=t.pr;}
+  });
+  if(okAll&&psum>0) syn=(wsum/psum)/cost;
+  const fmt=document.getElementById("predFmt").value;
+  let t="";
+  if(fmt==="short"){
+    t=`【${head}】${list.join(" ")} (${list.length}点/${cost.toLocaleString()}円) 的中見込み${(prob*100).toFixed(1)}%`
+      +(syn?` 合成${syn.toFixed(1)}倍`:"");
+  }else{
+    const uniq=[...new Set(list.map(c=>anaStake[c]||unit))];
+    const amt=uniq.length===1?`各${uniq[0]}円`:"金額は買い目ごと";
+    t=`▼${head}\n`
+     +`買い目 (${list.length}点・${amt}・計${cost.toLocaleString()}円)\n`
+     +list.map(c=>`　${c}${uniq.length>1?`　${(anaStake[c]||unit)}円`:""}`).join("\n")
+     +`\n\n的中見込み ${(prob*100).toFixed(1)}%`
+     +(syn?`\n合成オッズ ${syn.toFixed(1)}倍`:"")
+     +`\n`;
+    /* 推定1着率 */
+    if(curPos){
+      t+=`\n各艇の推定1着率\n　`+curPos[0].map((p,i)=>`${i+1}号艇 ${(p*100).toFixed(1)}%`).join(" / ")+"\n";
+    }
+    t+=`\n※蓄積データ約5万レースで学習したモデルによる推定です。\n`
+     +`※的中を保証するものではありません。予算を決めてお楽しみください。`;
+  }
+  document.getElementById("predOut").value=t;
+}
+function copyPred(){
+  const t=document.getElementById("predOut");
+  if(!t.value){makePred();}
+  t.select();
+  const done=()=>{const m=document.getElementById("predMsg");m.textContent="コピーしました";setTimeout(()=>m.textContent="",2000);};
+  navigator.clipboard.writeText(t.value).then(done).catch(()=>{document.execCommand("copy");done();});
 }
 function copyNote(){
   const t=document.getElementById("noteOut");
@@ -1847,7 +1927,7 @@ function oddsEdit(inp){
 }
 
 /* ── 保存・復元 ── */
-const IDS=["venue","engine","unit","topk","fixedEntry","dist","anaTop","anaTopY","anaN","anaY","fm1","fm2","fm3","wdir","widx","wspd","wave","weather","stab","wN","wL","wM","wB","wE","wS","wK","wC","topN"];
+const IDS=["venue","rno","engine","unit","topk","fixedEntry","dist","anaTop","anaTopY","anaN","anaY","fm1","fm2","fm3","wdir","widx","wspd","wave","weather","stab","wN","wL","wM","wB","wE","wS","wK","wC","topN"];
 for(let i=1;i<=6;i++)["reg","crs","cls","nat","loc","mot","bot","exh","st","f"].forEach(k=>IDS.push(k+i));
 function snapshot(){const s={odds:oddsMap,vals:{}};IDS.forEach(id=>s.vals[id]=document.getElementById(id).value);return s;}
 function apply(s){try{IDS.forEach(id=>{if(s.vals&&s.vals[id]!==undefined)document.getElementById(id).value=s.vals[id];});oddsMap=s.odds||{};}catch(e){}}
