@@ -358,10 +358,13 @@ footer{margin-top:28px;font-size:12px;color:var(--faint);border-top:1px solid va
   <div class="row" style="margin-bottom:8px;padding:10px 12px;background:var(--panel2);border-radius:8px;align-items:flex-start">
     <span style="font-size:12px;color:var(--sub);padding-top:6px">おまかせ</span>
     <div style="flex:1">
-      <div class="row" style="gap:6px">
+      <div class="row" style="gap:6px;flex-wrap:wrap">
         <label style="font-size:12px">予算</label>
         <input type="number" id="autoBudget" value="3000" min="200" step="100" style="width:78px" oninput="applyAuto()">
         <span style="font-size:12px;color:var(--sub)">円</span>
+        <label style="font-size:12px;margin-left:6px">合成オッズ目標</label>
+        <input type="number" id="autoSynTarget" value="1.8" min="1" step="0.1" style="width:56px" oninput="applyAuto()">
+        <span style="font-size:12px;color:var(--sub)">倍以上(オッズ取込時)</span>
         <button class="primary" onclick="applyAuto()">レースに合わせて自動で選ぶ</button>
       </div>
       <p class="hint" id="autoNote" style="margin:6px 0 0"></p>
@@ -1719,16 +1722,32 @@ function applyAuto(){
   if(!cl){document.getElementById("autoNote").textContent="判定できませんでした";return;}
   const r=FORMR[cl.lab]||FORMR["標準"];
   const B=Math.max(200,gv("autoBudget")||3000);
+  const target=Math.max(1,gv("autoSynTarget")||1.8);
   const [n1,n2,n3]=r.f;
   const rank=v=>[0,1,2,3,4,5].sort((a,b)=>v[b]-v[a]);
   const A=rank(curPos[0]).slice(0,n1), Bo=rank(curPos[1]).slice(0,n2), Cc=rank(curPos[2]).slice(0,n3);
-  const list=[];
+  let list=[];
   A.forEach(a=>Bo.forEach(b=>Cc.forEach(c=>{
     if(a===b||b===c||a===c)return;
     list.push(`${a+1}-${b+1}-${c+1}`);
   })));
   if(!list.length){document.getElementById("autoNote").textContent="買い目を作れませんでした";return;}
-  /* 予算を超えないよう切り捨てる */
+  /* オッズを取り込んでいれば、確率の低い買い目から間引いて合成オッズを目標まで引き上げる */
+  const hasOdds=Object.keys(oddsMap).length>0 && list.every(c=>parseFloat(oddsMap[c])>0);
+  let synFinal=null, narrowed=false;
+  if(hasOdds){
+    const probOf=c=>{const t=curTri.find(x=>x.c===c); return t?t.pr:0;};
+    const scored=[...list].sort((a,b)=>probOf(b)-probOf(a));
+    for(let cutN=0; cutN<scored.length-2; cutN++){
+      const sub=scored.slice(0,scored.length-cutN);
+      const each=Math.max(100,Math.floor(B/sub.length/100)*100);
+      let wsum=0,psum=0;
+      sub.forEach(c=>{const o=parseFloat(oddsMap[c]); const p=probOf(c); wsum+=p*o*each; psum+=p;});
+      const sv=psum>0?(wsum/psum)/(each*sub.length):0;
+      if(sv>=target){ list=sub; synFinal=sv; narrowed=(cutN>0); break; }
+      if(cutN===scored.length-3){ list=sub; synFinal=sv; narrowed=true; }
+    }
+  }
   const each=Math.max(100,Math.floor(B/list.length/100)*100);
   for(const c in picked) delete picked[c];
   anaStake={};
@@ -1740,8 +1759,12 @@ function applyAuto(){
   let why=`インの推定1着率 ${cl.est.toFixed(1)}%`;
   if(cl.lab==="カド先行"&&cl.lead4!==null) why+=` / 4コースが内勢より${cl.lead4.toFixed(1)}m前`;
   if(cl.lab==="イン凹み"&&cl.dip1!==null) why+=` / 1コースが外勢より${cl.dip1.toFixed(1)}m凹む`;
+  const synTxt=synFinal!==null
+    ? `　<span style="color:${synFinal>=target?"var(--pos)":"var(--neg)"}">合成オッズ ${synFinal.toFixed(1)}倍`
+      +(narrowed?`(確率下位を間引いて${target}倍以上に調整)`:"")+`</span>`
+    : (Object.keys(oddsMap).length?"":"　<span style=\"color:var(--faint)\">(オッズ未取込のため点数は絞っていません)</span>");
   document.getElementById("autoNote").innerHTML=
-    `<b>${cl.lab}</b> と判定 → フォーメーション <b>${n1}-${n2}-${n3}</b>`
+    `<b>${cl.lab}</b> と判定 → フォーメーション <b>${n1}-${n2}-${n3}</b>${narrowed?"(合成オッズ確保のため一部除外)":""}`
     +`<div class="row" style="gap:3px;align-items:center;flex-wrap:wrap;margin-top:7px">
         <span style="font-size:12px;color:var(--sub)">1着</span>${A.map(chip).join("")}
         <span style="color:var(--faint);margin:0 2px">-</span>
@@ -1751,11 +1774,13 @@ function applyAuto(){
       </div>`
     +`<div style="margin-top:6px;font-size:12px">${list.length}点 × ${each}円 = ${cost.toLocaleString()}円`
     +(cost>B?`<span class="evneg" style="font-size:11px">(予算${B.toLocaleString()}円を超えています)</span>`:"")
-    +`　<span style="color:var(--sub)">モデル的中確率 ${(prob*100).toFixed(1)}%</span></div>`
+    +`　<span style="color:var(--sub)">モデル的中確率 ${(prob*100).toFixed(1)}%</span>${synTxt}</div>`
     +`<div style="margin-top:4px;font-size:11px;color:var(--sub)">${why}</div>`
     +`<div style="margin-top:4px;font-size:11px;color:var(--faint)">`
-    +`蓄積データの検証: 回収率${r.roi}% / 的中${r.hit}% / 合成${r.syn}倍 / 万舟${r.man}回 / 100倍超を含む${r.o100}%`
-    +`(${r.n.toLocaleString()}レース)</div>`;
+    +(narrowed
+      ? `蓄積データの検証: 合成オッズ1.8倍以上に絞ると回収率83.9%(的中46.6%・5,286レース)`
+      : `蓄積データの検証: 回収率${r.roi}% / 的中${r.hit}% / 合成${r.syn}倍 / 万舟${r.man}回 / 100倍超を含む${r.o100}%(${r.n.toLocaleString()}レース)`)
+    +`</div>`;
   renderTri();
 }
 function applyRival(){
