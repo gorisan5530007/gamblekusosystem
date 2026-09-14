@@ -989,21 +989,31 @@ function parseChokuzen(){
   const t=norm(raw);
   /* 展示タイムは体重(○○.○kg)の直後にある値を拾う。
      前走成績の「6コース .04」などを誤って拾わないようにするため。 */
-  let m=[];
-  const wRx=/(\d{2}\.\d)\s*kg/g; let wm;
-  while((wm=wRx.exec(t))&&m.length<6){
-    const seg=t.slice(wm.index+wm[0].length, wm.index+wm[0].length+120);
+  let m=[], scratched=[];
+  const wRx=/(\d{2}\.\d)\s*kg/g;
+  const wPos=[]; let wm;
+  while((wm=wRx.exec(t))) wPos.push(wm.index+wm[0].length);
+  for(let i=0;i<wPos.length && m.length<6;i++){
+    const boatNo=m.length+scratched.length+1;   // 何艇目の体重欄か
+    const endPos=i+1<wPos.length?wPos[i+1]:wPos[i]+120;
+    const seg=t.slice(wPos[i], Math.min(endPos, wPos[i]+150));
     const em=seg.match(/(?:^|[^\d.])([67]\.\d{2})(?![\d])/);
-    if(em) m.push(em[1]);
+    if(em){ m.push(em[1]); }
+    else { scratched.push(boatNo); m.push(null); }   /* この艇は欠場の可能性(展示タイム欄が空) */
   }
-  if(m.length<6){
-    /* 体重が拾えない形式は従来どおり全体から探す(範囲を絞って誤検出を減らす) */
+  if(m.filter(x=>x).length<3){
+    /* 体重アンカーで拾えない形式は従来どおり全体から探す */
     const all=t.match(/\b[67]\.\d{2}\b/g)||[];
     m=all.filter(v=>{const x=parseFloat(v);return x>=6.2&&x<=7.8;}).slice(0,6);
+    scratched=[];
   }
   if(m.length===0){setMsg("msg1","展示タイムが見つかりませんでした。直前情報ページを貼り付けてください。",false);return;}
   const n=Math.min(6,m.length);
-  for(let i=1;i<=n;i++)document.getElementById("exh"+i).value=m[i-1];
+  const avgExh=(m.filter(x=>x).reduce((a,x)=>a+parseFloat(x),0)/(m.filter(x=>x).length||1))||6.85;
+  for(let i=1;i<=n;i++){
+    if(m[i-1]) document.getElementById("exh"+i).value=m[i-1];
+    else document.getElementById("exh"+i).value=avgExh.toFixed(2);   /* 欠場艇は平均値を仮置き(このコースは買い目から外してください) */
+  }
   /* スタート展示の進入。ページのソース(画像名)からも、貼り付けたテキストからも読み取る */
   let order=[];
   const im=[...raw.matchAll(/img_boat2_(\d)\.png/g)].map(x=>+x[1]);
@@ -1029,12 +1039,14 @@ function parseChokuzen(){
     entry=" / 進入→"+order.join("・")+(chg?"(前づけあり)":"(枠なり)");
   }
   const cond=extractConditions(t);
-  setMsg("msg1",n+"艇分の展示タイムを取り込みました("+m.slice(0,n).join(" / ")+")"+entry
+  const scrTxt=scratched.length?(" / ⚠ "+scratched.join("・")+"号艇は欠場の可能性があります(展示タイム未掲載のため平均値を仮置き。このコースは買い目から外してください)"):"";
+  setMsg("msg1",n+"艇分の展示タイムを取り込みました("+m.map(x=>x||"欠場?").join(" / ")+")"+entry
     +(cond.length?" / "+cond.join("、"):"")
-    +(order.length===6?"":" ※進入を読み取れませんでした。前づけがあれば手で直してください"),n===6);
+    +(order.length===6?"":" ※進入を読み取れませんでした。前づけがあれば手で直してください")
+    +scrTxt, n===6 && !scratched.length);
   calc();
 }
-const isNumTok=x=>/^\d+(\.\d+)?$/.test(x);
+const isNumTok=x=>/^\d+(\.\d+)?$/.test(x)||x==="欠場";
 const isBoatTok=x=>/^[1-6]$/.test(x);
 function parseOdds(){
   const t=norm(document.getElementById("paste2").value);
