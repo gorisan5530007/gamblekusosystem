@@ -828,6 +828,7 @@ function makeNote(){
   document.getElementById("noteOut").value=t;
   setMsg("msg3",`${list.length}件を書き出しました`,true);
   window.__lastNoteList=list;   /* 結果検証記事で使う */
+  window.__lastNoteMode=document.getElementById("recoMode").value;
 }
 let KRESULT=[];   /* [{v(場コード), r(R), combo, amount}] */
 function loadKFile(inp){
@@ -868,28 +869,38 @@ function verifyResults(){
     document.getElementById("verifyOut").innerHTML=`<p class="hint">${KRESULT.length}件の結果を取り込みました。先に「番組表からおすすめ抽出」→「note用の記事を作る」で予想レースを書き出してから照合してください。</p>`;
     return;
   }
+  const mode=window.__lastNoteMode||"strong";
+  /* 抽出条件ごとに「何を予想したか」「何が正解か」が違う */
+  function judge(x,winBoat){
+    if(mode==="strong") return {target:"①号艇", hit:winBoat===1, desc:"①号艇が1着"};
+    if(mode==="kado")   return {target:"④号艇", hit:winBoat===4, desc:"④号艇が1着"};
+    if(mode==="aare")   return {target:"①号艇以外", hit:winBoat!==1, desc:"①号艇以外が1着"};
+    /* all / custom: 推定1着率が最も高い艇を予想とする */
+    const top=(x.ev.ord?x.ev.ord[0]+1:1);
+    return {target:top+"号艇", hit:winBoat===top, desc:top+"号艇が1着"};
+  }
   const rows=list.map(x=>{
     const kr=KRESULT.find(k=>k.v===x.v && k.r===x.r);
     if(!kr) return {x,kr:null};
     const winBoat=+kr.combo.split("-")[0];
-    const predBoat=1;   /* 抽出時点の予想はつねに①号艇を軸にしている */
-    const hit = winBoat===predBoat;
-    return {x,kr,winBoat,hit};
+    const j=judge(x,winBoat);
+    return {x,kr,winBoat,hit:j.hit,target:j.target,desc:j.desc};
   });
   const matched=rows.filter(r=>r.kr);
   const hitN=matched.filter(r=>r.hit).length;
-  let h='<table><thead><tr><th>場</th><th class="num">R</th><th>①号艇の推定1着率</th>'
-   +'<th class="num">結果(3連単)</th><th class="num">払戻</th><th>頭予想</th></tr></thead><tbody>';
-  matched.forEach(({x,kr,winBoat,hit})=>{
+  const modeLabel={strong:"①号艇が堅い",kado:"④号艇が有力",aare:"①号艇が弱い(荒れ想定)",all:"推定上位",custom:"独自条件"}[mode]||mode;
+  let h='<table><thead><tr><th>場</th><th class="num">R</th><th>予想</th>'
+   +'<th class="num">結果(3連単)</th><th class="num">払戻</th><th>判定</th></tr></thead><tbody>';
+  matched.forEach(({x,kr,winBoat,hit,target,desc})=>{
     h+=`<tr><td style="font-size:12px">${VENMAP[x.v]||x.v}</td><td class="num">${x.r}R</td>
-      <td class="num">${x.ev.est.toFixed(1)}%</td>
+      <td style="font-size:12px">${desc}</td>
       <td class="num" style="font-family:ui-monospace">${kr.combo}</td>
       <td class="num">${kr.amount.toLocaleString()}円</td>
-      <td class="num">${hit?'<span class="evpos">的中</span>':`<span class="evneg">①不的中(${winBoat}号艇)</span>`}</td></tr>`;
+      <td class="num">${hit?'<span class="evpos">的中</span>':`<span class="evneg">不的中(${winBoat}号艇)</span>`}</td></tr>`;
   });
   h+="</tbody></table>";
   document.getElementById("verifyOut").innerHTML=h
-    +`<p class="hint" style="margin-top:8px">照合できたレース ${matched.length}/${list.length} 件のうち、①号艇の頭予想が的中したのは ${hitN} 件(${matched.length?(hitN/matched.length*100).toFixed(1):"0"}%)。</p>`;
+    +`<p class="hint" style="margin-top:8px">抽出条件「${modeLabel}」で書き出した ${matched.length}/${list.length} 件のうち、予想が的中したのは ${hitN} 件(${matched.length?(hitN/matched.length*100).toFixed(1):"0"}%)。</p>`;
   window.__verifyRows=matched;
   setMsg2("verifyMsg",`${matched.length}件を照合しました`,true);
 }
@@ -897,15 +908,18 @@ function setMsg2(id,txt,ok){const e=document.getElementById(id);e.textContent=tx
 function makeVerifyNote(){
   const rows=window.__verifyRows;
   if(!rows||!rows.length){setMsg2("verifyMsg","先に「結果と照合する」を実行してください",false);return;}
+  const mode=window.__lastNoteMode||"strong";
+  const modeLabel={strong:"①号艇が堅いと予想したレース",kado:"④号艇が有力と予想したレース",
+    aare:"①号艇が弱い(荒れ想定)と予想したレース",all:"推定上位を予想したレース",custom:"独自条件で抽出したレース"}[mode]||mode;
   const hitN=rows.filter(r=>r.hit).length;
   const d=new Date();
-  const head=`${d.getMonth()+1}月${d.getDate()}日の答え合わせ — 頭予想は当たったか`;
+  const head=`${d.getMonth()+1}月${d.getDate()}日の答え合わせ — ${modeLabel}は当たったか`;
   let t=`【${head}】\n\n`
-   +`照合レース数 ${rows.length}件 / ①号艇の頭予想 的中 ${hitN}件(${(hitN/rows.length*100).toFixed(1)}%)\n\n`;
-  rows.forEach(({x,kr,winBoat,hit})=>{
+   +`照合レース数 ${rows.length}件 / 予想的中 ${hitN}件(${(hitN/rows.length*100).toFixed(1)}%)\n\n`;
+  rows.forEach(({x,kr,winBoat,hit,target,desc})=>{
     t+=`▼${VENMAP[x.v]||x.v} ${x.r}R\n`
-     +`　予想: ①号艇(推定1着率${x.ev.est.toFixed(1)}%)\n`
-     +`　結果: ${kr.combo}(払戻${kr.amount.toLocaleString()}円) → ${hit?"的中":`①不的中・実際は${winBoat}号艇`}\n\n`;
+     +`　予想: ${desc}(推定1着率${x.ev.est.toFixed(1)}%)\n`
+     +`　結果: ${kr.combo}(払戻${kr.amount.toLocaleString()}円) → ${hit?"的中":`不的中・実際は${winBoat}号艇`}\n\n`;
   });
   t+=`---\n※推定1着率は公開データ約4.7万レースで学習・較正したモデルによるものです(進入は枠なり想定)。\n`
    +`※この記事は事前の推定と結果を突き合わせた記録で、特定の賭け方を推奨するものではありません。`;
