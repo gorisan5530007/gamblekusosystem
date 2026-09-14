@@ -684,10 +684,13 @@ const VENMAP={1:"桐生",2:"戸田",3:"江戸川",4:"平和島",5:"多摩川",6:
  9:"津",10:"三国",11:"びわこ",12:"住之江",13:"尼崎",14:"鳴門",15:"丸亀",16:"児島",
  17:"宮島",18:"徳山",19:"下関",20:"若松",21:"芦屋",22:"福岡",23:"唐津",24:"大村"};
 function parseProgram(){
-  const t=document.getElementById("paste3").value;
-  if(!t.trim()){setMsg("msg3","番組表の中身を貼り付けてください",false);return;}
+  const raw0=document.getElementById("paste3").value;
+  if(!raw0.trim()){setMsg("msg3","番組表の中身を貼り付けてください",false);return;}
+  const t0=norm(raw0);
+  const dm0=t0.match(/(\d{4})[年\/]\s*(\d{1,2})[月\/]\s*(\d{1,2})日?/);
+  window.__progDate=dm0?`${dm0[1]}-${dm0[2].padStart(2,"0")}-${dm0[3].padStart(2,"0")}`:null;
   PROG=[]; let venue=null,rno=null,cur=[],title=null,hdr=0,deadline=null;
-  for(let raw of t.split(/\r?\n/)){
+  for(let raw of t0.split(/\r?\n/)){
     let m=raw.match(/^(\d{2})BBGN/);
     if(m){venue=+m[1];title=null;hdr=0;continue;}
     if(venue===null)continue;
@@ -785,6 +788,11 @@ function noteList(){
   else list.sort((a,b)=>a.v-b.v||a.r-b.r);
   return list;
 }
+function fmtJDate(iso){
+  if(!iso) return "(開催日不明)";
+  const [y,m,d]=iso.split("-").map(Number);
+  return `${y}年${m}月${d}日`;
+}
 function betPlain(x,ev){
   const e=x.e, G={A1:4,A2:3,B1:2,B2:1}, ord=ev.ord;
   if(ev.est>=68){
@@ -805,8 +813,7 @@ function makeNote(){
   const list=noteList().slice(0,n);
   const modeLabel={strong:"1コースが堅いレース",kado:"カドが有力なレース",
     aare:"荒れそうなレース",all:"全レース",custom:"独自条件で抽出"}[document.getElementById("recoMode").value];
-  const d=new Date();
-  const head=`${d.getMonth()+1}月${d.getDate()}日の注目レース(${modeLabel})`;
+  const head=`${fmtJDate(window.__progDate)}の注目レース(${modeLabel})`;
   let t="";
   if(fmt==="md"){
     t=`## ${head}\n\n`
@@ -860,8 +867,11 @@ function parseKFile(text){
   return out;
 }
 function verifyResults(){
-  const t=document.getElementById("pasteK").value;
-  if(!t.trim()){setMsg2("verifyMsg","結果ファイルの中身を貼り付けてください",false);return;}
+  const raw=document.getElementById("pasteK").value;
+  if(!raw.trim()){setMsg2("verifyMsg","結果ファイルの中身を貼り付けてください",false);return;}
+  const t=norm(raw);
+  const dm0=t.match(/(\d{4})[年\/]\s*(\d{1,2})[月\/]\s*(\d{1,2})日?/);
+  window.__kDate=dm0?`${dm0[1]}-${dm0[2].padStart(2,"0")}-${dm0[3].padStart(2,"0")}`:(window.__progDate||null);
   KRESULT=parseKFile(t);
   if(!KRESULT.length){document.getElementById("verifyMsg").innerHTML='<span class="evneg">結果を読み取れませんでした。競走成績ページ(K******.TXT)を貼り付けてください</span>';return;}
   const list=window.__lastNoteList;
@@ -912,8 +922,7 @@ function makeVerifyNote(){
   const modeLabel={strong:"①号艇が堅いと予想したレース",kado:"④号艇が有力と予想したレース",
     aare:"①号艇が弱い(荒れ想定)と予想したレース",all:"推定上位を予想したレース",custom:"独自条件で抽出したレース"}[mode]||mode;
   const hitN=rows.filter(r=>r.hit).length;
-  const d=new Date();
-  const head=`${d.getMonth()+1}月${d.getDate()}日の答え合わせ — ${modeLabel}は当たったか`;
+  const head=`${fmtJDate(window.__kDate||window.__progDate)}の答え合わせ — ${modeLabel}は当たったか`;
   let t=`【${head}】\n\n`
    +`照合レース数 ${rows.length}件 / 予想的中 ${hitN}件(${(hitN/rows.length*100).toFixed(1)}%)\n\n`;
   rows.forEach(({x,kr,winBoat,hit,target,desc})=>{
