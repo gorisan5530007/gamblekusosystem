@@ -414,6 +414,26 @@ footer{margin-top:28px;font-size:12px;color:var(--faint);border-top:1px solid va
       <p class="hint" id="autoNote" style="margin:6px 0 0"></p>
     </div>
   </div>
+  <div class="row" style="margin-bottom:8px;padding:10px 12px;background:var(--panel2);border-radius:8px;align-items:flex-start">
+    <span style="font-size:12px;color:var(--sub);padding-top:6px">累積確率</span>
+    <div style="flex:1">
+      <div class="row" style="gap:6px;flex-wrap:wrap">
+        <label style="font-size:12px">1着</label>
+        <input type="number" id="cumTh1" value="70" min="10" max="99" step="5" style="width:52px" oninput="applyCum()">
+        <span style="font-size:12px;color:var(--sub)">%</span>
+        <label style="font-size:12px">2着</label>
+        <input type="number" id="cumTh2" value="80" min="10" max="99" step="5" style="width:52px" oninput="applyCum()">
+        <span style="font-size:12px;color:var(--sub)">%</span>
+        <label style="font-size:12px">3着</label>
+        <input type="number" id="cumTh3" value="90" min="10" max="99" step="5" style="width:52px" oninput="applyCum()">
+        <span style="font-size:12px;color:var(--sub)">%</span>
+        <button class="primary" onclick="applyCum()">この閾値で選ぶ</button>
+      </div>
+      <p class="hint" style="margin:4px 0 0">着順ごとの確率が高い艇から順に足し、累積が閾値に達するまでをその着順の候補にします。<br>
+      検証(17,730レース): 60-70-80で回収率79.7%(平均12.7点・万舟捕捉5.5%) / 70-80-90で76.7%(平均25.1点・万舟捕捉17.6%) / 80-85-90で75.0%(平均36.7点・万舟捕捉32.0%)。閾値を上げるほど点数と万舟の捕捉率が増え、回収率は下がります。</p>
+      <p class="hint" id="cumNote" style="margin:4px 0 0"></p>
+    </div>
+  </div>
   <div class="row" style="margin-bottom:8px;padding:8px 10px;background:var(--panel2);border-radius:8px;align-items:flex-start">
     <span style="font-size:12px;color:var(--sub);padding-top:4px">検証済みの形</span>
     <div>
@@ -2002,6 +2022,44 @@ function classifyRace(){
   else if(est<35) lab="大荒れ想定";
   return {lab:lab,est:est,lead4:lead4,dip1:dip1};
 }
+function applyCum(){
+  if(!curPos||!curTri.length){document.getElementById("cumNote").textContent="先に出走表を取り込んでください";return;}
+  const th1=Math.max(1,Math.min(99,gv("cumTh1")||70))/100;
+  const th2=Math.max(1,Math.min(99,gv("cumTh2")||80))/100;
+  const th3=Math.max(1,Math.min(99,gv("cumTh3")||90))/100;
+  const cumSelect=(p,th)=>{
+    const order=[0,1,2,3,4,5].sort((a,b)=>p[b]-p[a]);
+    let s=0; const sel=[];
+    for(const i of order){ sel.push(i); s+=p[i]; if(s>=th) break; }
+    return sel;
+  };
+  const A=cumSelect(curPos[0],th1), B=cumSelect(curPos[1],th2), C=cumSelect(curPos[2],th3);
+  const list=[];
+  A.forEach(a=>B.forEach(b=>C.forEach(c=>{
+    if(a===b||b===c||a===c)return;
+    list.push(`${a+1}-${b+1}-${c+1}`);
+  })));
+  const uniq=[...new Set(list)];
+  if(!uniq.length){document.getElementById("cumNote").textContent="買い目を作れませんでした";return;}
+  const unit=gv("unit")||100;
+  for(const c in picked) delete picked[c];
+  anaStake={};
+  uniq.forEach(c=>{picked[c]=true; anaStake[c]=unit;});
+  const cost=unit*uniq.length;
+  let prob=0; uniq.forEach(c=>{const t=curTri.find(x=>x.c===c); if(t)prob+=t.pr;});
+  const chip=i=>`<span class="chip" style="width:19px;height:19px;font-size:11px;background:${BC[i]};color:${BT[i]}">${i+1}</span>`;
+  document.getElementById("cumNote").innerHTML=
+    `<div class="row" style="gap:3px;align-items:center;flex-wrap:wrap">
+       <span style="font-size:12px;color:var(--sub)">1着</span>${A.map(chip).join("")}
+       <span style="color:var(--faint);margin:0 2px">-</span>
+       <span style="font-size:12px;color:var(--sub)">2着</span>${B.map(chip).join("")}
+       <span style="color:var(--faint);margin:0 2px">-</span>
+       <span style="font-size:12px;color:var(--sub)">3着</span>${C.map(chip).join("")}
+     </div>
+     <div style="margin-top:6px;font-size:12px">${uniq.length}点 × ${unit}円 = ${cost.toLocaleString()}円`
+     +`　<span style="color:var(--sub)">モデル的中確率 ${(prob*100).toFixed(1)}%</span></div>`;
+  renderTri();
+}
 function applyAuto(){
   if(!curTri.length||!curPos){document.getElementById("autoNote").textContent="先に出走表を取り込んでください";return;}
   const cl=classifyRace();
@@ -2493,7 +2551,7 @@ function oddsEdit(inp){
 }
 
 /* ── 保存・復元 ── */
-const IDS=["venue","rno","engine","unit","topk","fixedEntry","dist","anaTop","anaTopY","anaN","anaY","fm1","fm2","fm3","wdir","widx","wspd","wave","weather","stab","wN","wL","wM","wB","wE","wS","wK","wC","topN"];
+const IDS=["venue","rno","engine","unit","topk","fixedEntry","dist","anaTop","anaTopY","anaN","anaY","fm1","fm2","fm3","wdir","widx","wspd","wave","weather","stab","wN","wL","wM","wB","wE","wS","wK","wC","topN","autoBudget","autoSynTarget","cumTh1","cumTh2","cumTh3"];
 for(let i=1;i<=6;i++)["reg","crs","cls","nat","loc","mot","bot","exh","st","f"].forEach(k=>IDS.push(k+i));
 function snapshot(){const s={odds:oddsMap,vals:{}};IDS.forEach(id=>s.vals[id]=document.getElementById(id).value);return s;}
 function apply(s){try{IDS.forEach(id=>{if(s.vals&&s.vals[id]!==undefined)document.getElementById(id).value=s.vals[id];});oddsMap=s.odds||{};}catch(e){}}
