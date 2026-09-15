@@ -303,6 +303,13 @@ footer{margin-top:28px;font-size:12px;color:var(--faint);border-top:1px solid va
   <div class="slit" id="slit"></div>
 </section>
 
+<!-- ══ 展開(コース×決まり手) ══ -->
+<section class="panel">
+  <h2><span class="en">PATTERN</span>展開 — コース×決まり手</h2>
+  <p class="hint" style="margin-top:-4px">推定1着率 × そのコースが勝つ際の決まり手の内訳(実績5.2万レース)を掛け合わせた確率。参考オッズは確率の逆数(控除率を考慮しない理論値)。</p>
+  <div class="tblwrap" id="kimTableOut"></div>
+</section>
+
 <!-- ══ 推定成績 ══ -->
 <section class="panel">
   <h2><span class="en">MODEL</span>各艇の推定成績 — 着順ごとの確率</h2>
@@ -479,7 +486,9 @@ const PROGM={"names":["枠1","枠2","枠3","枠4","枠5","枠6","全国勝率","
 const MANSHU={"base":16.3,"venue":{"丸亀":16.3,"多摩川":17.4,"徳山":15.3,"三国":18.2,"尼崎":14.1,"宮島":17.5,"若松":14.9,"桐生":17.9,"大村":15.1,"戸田":17.8,"平和島":16.8,"児島":18.1,"住之江":16.9,"蒲郡":14.5,"下関":14.0,"鳴門":18.9,"浜名湖":16.2,"唐津":14.9,"常滑":16.3,"江戸川":18.1,"福岡":13.1,"びわこ":17.0,"津":16.1,"芦屋":16.3},"wind":[15.3,16.1,17.1,18.3],"wave":[15.4,16.5,17.1,19.1],"fix":11.1,"norm":16.4};
 const FORMR={"標準":{"f":[2,4,4],"roi":79.6,"hit":51.3,"syn":1.9,"man":51,"o100":69.7,"n":5286},"イン堅い":{"f":[2,3,4],"roi":77.8,"hit":41.3,"syn":2.4,"man":20,"o100":55.9,"n":5286},"大荒れ想定":{"f":[3,4,4],"roi":78.6,"hit":57.6,"syn":1.7,"man":120,"o100":88.1,"n":5286},"カド先行":{"f":[3,4,4],"roi":78.6,"hit":57.6,"syn":1.7,"man":120,"o100":88.1,"n":5286},"イン凹み":{"f":[3,4,5],"roi":74.8,"hit":68.3,"syn":1.4,"man":185,"o100":98.5,"n":5286},"進入固定×穏やか":{"f":[2,3,4],"roi":77.8,"hit":41.3,"syn":2.4,"man":20,"o100":55.9,"n":5286}};
 const AUTORULE={"カド先行":{"n":10,"roi":79.6,"hit":41.1,"races":1012},"イン凹み":{"n":12,"roi":80.4,"hit":46.3,"races":2381},"進入固定×穏やか":{"n":2,"roi":76.2,"hit":24.4,"races":254},"イン堅い":{"n":2,"roi":84.6,"hit":23.6,"races":2042},"大荒れ想定":{"n":3,"roi":86.7,"hit":16.2,"races":2600},"標準":{"n":2,"roi":86.7,"hit":20.0,"races":8850}};
+const KIMCOND={"1":{"逃げ":0.958,"抜き":0.042},"2":{"差し":0.6196,"まくり":0.2929,"抜き":0.0875},"3":{"差し":0.1121,"まくり":0.4039,"まくり差し":0.3819,"抜き":0.1022},"4":{"まくり":0.4832,"まくり差し":0.2643,"差し":0.1802,"抜き":0.0723},"5":{"まくり":0.2142,"まくり差し":0.6203,"差し":0.0667,"抜き":0.0988},"6":{"まくり差し":0.4428,"まくり":0.3161,"抜き":0.1226,"差し":0.1185}};
 const FORM2={"lo":25,"hi":45,"cut":2,"roi":81.4,"n":6710,"hit":1400,"pts":4,"note":"イン推定25〜45%で①と対抗の2艇を1・2着に、3着は残りのうち有力2艇"};
+const AARE_EXCL={"roi":86.6,"n":2727,"hit":625,"pts":8,"note":"荒れ想定(①号艇が弱い)と判定されたレースで、①号艇を頭から除外し確率上位8点を買う"};
 const FORMS={"1":{"partner":2,"th":2,"cut":0,"tr":86.2,"te":84.4,"n":585,"hit":245,"pts":8.0,"conf":"高","note":"期間をまたいで安定"},"2":{"partner":3,"th":2,"cut":3,"tr":85.6,"te":105.9,"n":1299,"hit":117,"pts":2.8,"conf":"低","note":"サンプル不足・参考程度"},"3":{"partner":4,"th":1,"cut":3,"tr":79.3,"te":71.5,"n":1644,"hit":93,"pts":2.9,"conf":"低","note":"サンプル不足・参考程度"},"4":{"partner":5,"th":0,"cut":3,"tr":91.7,"te":90.0,"n":3576,"hit":213,"pts":3.9,"conf":"高","note":"期間をまたいで安定"},"5":{"partner":6,"th":2,"cut":2,"tr":86.8,"te":88.1,"n":170,"hit":10,"pts":5.5,"conf":"低","note":"サンプル不足・参考程度"}};
 const ALLLEAD={"2":{"n":429,"rate":33.6,"idx":259},"3":{"n":339,"rate":32.4,"idx":259},"4":{"n":393,"rate":31.8,"idx":311},"5":{"n":351,"rate":23.9,"idx":402},"6":{"n":535,"rate":13.3,"idx":717}};
 const BOOST={"1":[{"lab":"自艇の勝率が最高","idx":134,"rate":74.2},{"lab":"自艇がA1級","idx":130,"rate":72.1},{"lab":"自艇がA1かつ内勢より前","idx":130,"rate":72.1}],"2":[{"lab":"内勢より2m以上前","idx":223,"rate":30.2},{"lab":"自艇の勝率が最高","idx":207,"rate":28.0},{"lab":"自艇がA1かつ内勢より前","idx":212,"rate":28.7}],"3":[{"lab":"内勢より2m以上前","idx":211,"rate":27.0},{"lab":"自艇がA1かつ内勢より前","idx":209,"rate":26.9},{"lab":"内勢より1m以上前","idx":185,"rate":23.8}],"4":[{"lab":"内勢より2m以上前","idx":302,"rate":30.5},{"lab":"内勢より1m以上前","idx":262,"rate":26.5},{"lab":"自艇がA1かつ内勢より前","idx":257,"rate":25.9}],"5":[{"lab":"自艇がA1かつ内勢より前","idx":272,"rate":16.6},{"lab":"内勢より1m以上前","idx":246,"rate":15.0},{"lab":"自艇の勝率が最高","idx":228,"rate":13.9}],"6":[{"lab":"内勢より1m以上前","idx":384,"rate":7.3},{"lab":"自艇がA1かつ内勢より前","idx":397,"rate":7.6},{"lab":"自艇の勝率が最高","idx":305,"rate":5.8}]};
@@ -741,7 +750,7 @@ function evalRace(x){
   const mxNat=Math.max(...nats), avg=mn;
   const i1=e[0], kado=e[3];
   const top1=nats[0]>=mxNat-1e-9, a1=i1.grade==="A1";
-  const kadoStrong=(nats[3]>=mxNat-0.3)&&G[kado.grade]>=3;
+  const kadoStrong=(nats[3]>=mxNat-1e-9)&&kado.grade==="A1";   /* 検証済み: 該当時の的中率25.4%(元の条件は21.8%) */
   const gap1=nats[0]-avg;
   const weak1=gap1<=-0.5&&G[i1.grade]<=3;
   const nA=e.filter(b=>G[b.grade]>=3).length;
@@ -1576,6 +1585,7 @@ function calc(){
   const in2=pos1.map((x,i)=>x+pos2[i]);
   const in3=pos1.map((x,i)=>x+pos2[i]+pos3[i]);
   curPos=[pos1,pos2,pos3];
+  renderKimTable(pos1);
   renderSlit(crs);
   renderStats(p,crs,pos1,pos2,pos3,in2,in3,div,rds);
   renderTri();
@@ -2034,8 +2044,74 @@ function renderFormBtns(){
     return `<button class="${cl}" onclick="applyForm2(${c})" title="回収率${f.te}% / 信頼度${f.conf}">${c}→${f.partner}</button>`;
   }).join("")
    +`<button class="primary" onclick="applyRival()" title="回収率${FORM2.roi}% / ${FORM2.n}レース">①対抗の2頭流し</button>`
+   +`<button class="primary" onclick="applyAareExcl()" title="回収率${AARE_EXCL.roi}% / ${AARE_EXCL.n}レース">荒れ想定・①除外8点</button>`
    +'<span style="font-size:11px;color:var(--faint);align-self:center;margin-left:6px">濃い色=信頼度が高い形</span>';
   el.dataset.done="1";
+}
+
+function renderKimTable(pos1){
+  if(typeof KIMCOND==="undefined")return;
+  const el=document.getElementById("kimTableOut");
+  if(!el)return;
+  const rows=[];
+  for(let c=1;c<=6;c++){
+    const pWin=pos1[c-1];              /* このレースでそのコースが1着になる推定確率 */
+    const dist=KIMCOND[c]||{};
+    for(const km in dist){
+      rows.push({c, km, p: pWin*dist[km]});
+    }
+  }
+  rows.sort((a,b)=>b.p-a.p);
+  const top=rows.slice(0,10);
+  const chip=i=>`<span class="chip" style="width:18px;height:18px;font-size:11px;background:${BC[i-1]};color:${BT[i-1]}">${i}</span>`;
+  let h='<table><thead><tr><th>コース</th><th>決まり手</th><th class="num">確率</th><th class="num">参考オッズ</th></tr></thead><tbody>';
+  top.forEach(r=>{
+    const pct=(r.p*100).toFixed(2);
+    const fairOdds=r.p>0?(1/r.p).toFixed(2):"—";
+    h+=`<tr><td>${chip(r.c)} ${r.c}コース</td><td>${r.km}</td>`
+      +`<td class="num">${pct}%</td><td class="num" style="color:var(--faint)">${fairOdds}倍</td></tr>`;
+  });
+  h+="</tbody></table>";
+  el.innerHTML=h;
+}
+function applyAareExcl(){
+  if(!curTri.length||!curPos){document.getElementById("formNote").textContent="先に出走表を取り込んでください";return;}
+  const GM={A1:4,A2:3,B1:2,B2:1};
+  const crs=[]; for(let i=1;i<=6;i++)crs.push(parseInt(document.getElementById("crs"+i).value));
+  const byC={}; crs.forEach((c,i)=>byC[c]=i+1);
+  const i1=byC[1];
+  const note=document.getElementById("formNote");
+  if(!i1){ note.textContent="1コースの艇が特定できません"; return; }
+  /* 荒れ想定の判定: ①号艇の勝率がメンバー平均より0.5以上低く、かつB級以下 */
+  const nats=[]; for(let i=1;i<=6;i++) nats.push(gv("nat"+i)||5);
+  const avg=nats.reduce((a,b)=>a+b,0)/6;
+  const g1=document.getElementById("cls"+i1).value;
+  const gap1=(nats[i1-1]||5)-avg;
+  const isAare = gap1<=-0.5 && GM[g1]<=2;
+  if(!isAare){
+    note.innerHTML=`<span class="evneg">この出走メンバーは「荒れ想定」の条件に該当しません</span>`
+      +`(①号艇の勝率は平均比${gap1>=0?"+":""}${gap1.toFixed(2)}・級別${g1||"—"})。`
+      +`この形は①号艇の勝率が平均より0.5以上低く、B級以下のときに使う想定です。`;
+    return;
+  }
+  /* ①号艇を頭から除外し、三連単の確率上位8点を選ぶ */
+  const list=curTri.filter(t=>+t.c.split("-")[0]!==i1).slice(0,AARE_EXCL.pts).map(t=>t.c);
+  if(!list.length){ note.textContent="買い目を作れませんでした"; return; }
+  const unit=gv("unit")||100;
+  for(const c in picked) delete picked[c];
+  anaStake={};
+  list.forEach(c=>{picked[c]=true; anaStake[c]=unit;});
+  const cost=unit*list.length;
+  let prob=0; list.forEach(c=>{const t=curTri.find(x=>x.c===c); if(t)prob+=t.pr;});
+  const chip=i=>`<span class="chip" style="width:20px;height:20px;font-size:12px;background:${BC[i-1]};color:${BT[i-1]}">${i}</span>`;
+  const dead=`<span class="chip" style="width:20px;height:20px;font-size:12px;background:var(--field);color:var(--faint);border:1px solid var(--line);text-decoration:line-through">${i1}</span>`;
+  const rows=list.map(c=>c.split("-").map(Number).map(chip).join('<span style="color:var(--faint);margin:0 2px">-</span>')).join('<span style="color:var(--faint);margin:0 10px">/</span>');
+  note.innerHTML=`<div style="font-size:12px">荒れ想定と判定(①号艇の勝率が平均比${gap1.toFixed(2)}・${g1}級) → 頭から除外 ${dead}</div>`
+    +`<div style="margin-top:6px">${rows}</div>`
+    +`<div style="margin-top:6px;font-size:12px">${list.length}点 × ${unit}円 = ${cost.toLocaleString()}円`
+    +`　<span style="color:var(--sub)">モデル的中確率 ${(prob*100).toFixed(1)}%</span></div>`
+    +`<div style="margin-top:4px;font-size:11px;color:var(--faint)">蓄積データの検証: 回収率${AARE_EXCL.roi}%(${AARE_EXCL.n.toLocaleString()}レース・的中${(AARE_EXCL.hit/AARE_EXCL.n*100).toFixed(1)}%)／${AARE_EXCL.note}</div>`;
+  renderTri();
 }
 function applyAna(){
   if(!curTri.length)return;
