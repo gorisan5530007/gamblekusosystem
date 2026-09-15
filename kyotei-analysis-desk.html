@@ -899,9 +899,10 @@ function makeNote(){
   const head=`${fmtJDate(window.__progDate)}の注目レース(${modeLabel})`;
   let t="";
   const chipTxt=i=>String(i+1);
+  const joinNum=arr=>arr.map(chipTxt).join("");     /* 確率が高い順のまま連結(ソートしない) */
   const cumTxt=x=>{
     const f=cumFormation(x.ev.pos,0.70,0.80,0.90);
-    return `1着${f.A.map(chipTxt).join("")} - 2着${f.B.map(chipTxt).join("")} - 3着${f.C.map(chipTxt).join("")}（${f.list.length}点）`;
+    return `${joinNum(f.A)}-${joinNum(f.B)}-${joinNum(f.C)}（${f.list.length}点）`;
   };
   if(fmt==="md"){
     t=`## ${head}\n\n`
@@ -976,7 +977,8 @@ function verifyResults(){
     if(!kr) return {x,kr:null};
     const f=cumFormation(x.ev.pos,0.70,0.80,0.90);
     const hit=f.list.includes(kr.combo);
-    const desc=`1着${f.A.map(i=>i+1).join("")}-2着${f.B.map(i=>i+1).join("")}-3着${f.C.map(i=>i+1).join("")}(${f.list.length}点)`;
+    const joinNum2=arr=>arr.map(i=>i+1).join("");   /* 確率が高い順のまま連結(ソートしない) */
+    const desc=`${joinNum2(f.A)}-${joinNum2(f.B)}-${joinNum2(f.C)}(${f.list.length}点)`;
     const cost=f.list.length*100;
     const ret=hit?kr.amount:0;
     return {x,kr,hit,desc,pts:f.list.length,cost,ret};
