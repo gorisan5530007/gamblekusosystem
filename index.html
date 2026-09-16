@@ -901,12 +901,12 @@ function makeNote(){
   const chipTxt=i=>String(i+1);
   const joinNum=arr=>arr.map(chipTxt).join("");     /* 確率が高い順のまま連結(ソートしない) */
   const cumTxt=x=>{
-    const f=cumFormation(x.ev.pos,0.70,0.80,0.90);
+    const f=cumFormation(x.ev.pos,0.60,0.70,0.80);
     return `${joinNum(f.A)}-${joinNum(f.B)}-${joinNum(f.C)}（${f.list.length}点）`;
   };
   if(fmt==="md"){
     t=`## ${head}\n\n`
-     +`| 締切 | 場 | R | ①号艇 | 推定1着率 | フォーメーション(累積70-80-90) |\n|---|---|---|---|---|---|\n`
+     +`| 締切 | 場 | R | ①号艇 | 推定1着率 | フォーメーション(累積60-70-80) |\n|---|---|---|---|---|---|\n`
      +list.map(x=>`| ${x.dl||"—"} | ${VENMAP[x.v]||x.v} | ${x.r}R | ${x.e[0].name}(${x.e[0].grade} ${(x.e[0].nat||0).toFixed(2)}) | ${x.ev.est.toFixed(1)}% | ${cumTxt(x)} |`).join("\n")
      +`\n\n各艇の推定1着率\n\n`
      +list.map(x=>`- ${VENMAP[x.v]||x.v}${x.r}R … ${x.ev.P.map((p,i)=>`${i+1}号艇 ${p.toFixed(0)}%`).join(" / ")}`).join("\n");
@@ -917,7 +917,7 @@ function makeNote(){
         return `▼${x.dl||""} ${VENMAP[x.v]||x.v} ${x.r}R\n`
          +`　①${e[0].name}(${e[0].grade}・勝率${(e[0].nat||0).toFixed(2)})\n`
          +`　推定1着率 ${x.ev.P.map((p,i)=>`${i+1}号艇${p.toFixed(0)}%`).join(" ")}\n`
-         +`　フォーメーション(累積70-80-90) ${cumTxt(x)}`;
+         +`　フォーメーション(累積60-70-80) ${cumTxt(x)}`;
      }).join("\n\n");
   }
   t+=`\n\n---\n※推定1着率・フォーメーションは公開データ約4.7万レースで学習・較正したモデルによるものです(進入は枠なり想定)。`
@@ -971,11 +971,11 @@ function verifyResults(){
     document.getElementById("verifyOut").innerHTML=`<p class="hint">${KRESULT.length}件の結果を取り込みました。先に「番組表からおすすめ抽出」→「note用の記事を作る」で予想レースを書き出してから照合してください。</p>`;
     return;
   }
-  /* 判定基準はフォーメーション(累積70-80-90)の的中で統一する */
+  /* 判定基準はフォーメーション(累積60-70-80)の的中で統一する */
   const rows=list.map(x=>{
     const kr=KRESULT.find(k=>k.v===x.v && k.r===x.r);
     if(!kr) return {x,kr:null};
-    const f=cumFormation(x.ev.pos,0.70,0.80,0.90);
+    const f=cumFormation(x.ev.pos,0.60,0.70,0.80);
     const hit=f.list.includes(kr.combo);
     const joinNum2=arr=>arr.map(i=>i+1).join("");   /* 確率が高い順のまま連結(ソートしない) */
     const desc=`${joinNum2(f.A)}-${joinNum2(f.B)}-${joinNum2(f.C)}(${f.list.length}点)`;
@@ -988,7 +988,7 @@ function verifyResults(){
   const invTotal=matched.reduce((a,r)=>a+r.cost,0);
   const retTotal=matched.reduce((a,r)=>a+r.ret,0);
   const roi=invTotal?(retTotal/invTotal*100):0;
-  let h='<table><thead><tr><th>場</th><th class="num">R</th><th>フォーメーション(累積70-80-90)</th>'
+  let h='<table><thead><tr><th>場</th><th class="num">R</th><th>フォーメーション(累積60-70-80)</th>'
    +'<th class="num">結果(3連単)</th><th class="num">払戻</th><th>判定</th></tr></thead><tbody>';
   matched.forEach(({x,kr,hit,desc})=>{
     h+=`<tr><td style="font-size:12px">${VENMAP[x.v]||x.v}</td><td class="num">${x.r}R</td>
@@ -999,7 +999,7 @@ function verifyResults(){
   });
   h+="</tbody></table>";
   document.getElementById("verifyOut").innerHTML=h
-    +`<p class="hint" style="margin-top:8px">累積70-80-90のフォーメーションで書き出した ${matched.length}/${list.length} 件のうち、的中は ${hitN} 件(${matched.length?(hitN/matched.length*100).toFixed(1):"0"}%)。`
+    +`<p class="hint" style="margin-top:8px">累積60-70-80のフォーメーションで書き出した ${matched.length}/${list.length} 件のうち、的中は ${hitN} 件(${matched.length?(hitN/matched.length*100).toFixed(1):"0"}%)。`
     +`投資${invTotal.toLocaleString()}円 → 払戻${retTotal.toLocaleString()}円(回収率${roi.toFixed(1)}%)。</p>`;
   window.__verifyRows=matched;
   setMsg2("verifyMsg",`${matched.length}件を照合しました`,true);
@@ -1012,7 +1012,7 @@ function makeVerifyNote(){
   const invTotal=rows.reduce((a,r)=>a+r.cost,0);
   const retTotal=rows.reduce((a,r)=>a+r.ret,0);
   const roi=invTotal?(retTotal/invTotal*100):0;
-  const head=`${fmtJDate(window.__kDate||window.__progDate)}の答え合わせ — フォーメーション(累積70-80-90)は当たったか`;
+  const head=`${fmtJDate(window.__kDate||window.__progDate)}の答え合わせ — フォーメーション(累積60-70-80)は当たったか`;
   let t=`【${head}】\n\n`
    +`照合レース数 ${rows.length}件 / 的中 ${hitN}件(${(hitN/rows.length*100).toFixed(1)}%) / `
    +`投資${invTotal.toLocaleString()}円 → 払戻${retTotal.toLocaleString()}円(回収率${roi.toFixed(1)}%)\n\n`;
