@@ -344,6 +344,7 @@ footer{margin-top:28px;font-size:12px;color:var(--faint);border-top:1px solid va
     <span id="notifyStatus" style="font-size:11px;color:var(--faint)"></span>
   </div>
   <div class="slit" id="slit"></div>
+  
 </section>
 
 <!-- ══ 展開(コース×決まり手) ══ -->
@@ -2116,6 +2117,7 @@ function renderSlit(crs){
   h+=`<div style="position:absolute;left:${pct(0)}%;bottom:2px;font-size:10px;color:var(--wake);opacity:.7;margin-left:4px">スタートライン</div>`;
   h+=`<div style="position:absolute;left:${pct(150)}%;top:50%;width:13px;height:13px;border-radius:50%;background:#E8590C;border:2px solid #F8E0C8;transform:translate(-50%,-50%)"></div>`;
   h+=`<div style="position:absolute;left:${pct(150)}%;bottom:2px;font-size:10px;color:#E8905C;margin-left:-20px">1マーク</div>`;
+
   const barW=(5*animK/180*86).toFixed(2);
   h+=`<div style="position:absolute;right:10px;top:6px;font-size:10px;color:var(--faint)"><span style="display:inline-block;width:${barW}%;min-width:${(5*animK*0.55).toFixed(0)}px;border-bottom:2px solid var(--faint);margin-right:4px;vertical-align:middle"></span>5m</div>`;
   const boatL=(2.9*animK/180*86).toFixed(2), boatH=Math.min(Math.round(4*animK)+2,16);
