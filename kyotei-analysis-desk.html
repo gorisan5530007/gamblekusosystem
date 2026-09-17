@@ -839,7 +839,16 @@ function evalRace(x){
   const weak1=gap1<=-0.5&&G[i1.grade]<=3;
   const nA=e.filter(b=>G[b.grade]>=3).length;
   const ord=[0,1,2,3,4,5].sort((a,b)=>P[b]-P[a]);
-  return {top1,a1,kadoStrong,weak1,nA,mx:mxNat,gap1,est:P[0],P,ord,pos:[pp1,pp2,pp3]};
+  /* 展開予想: コース別1着率(P) × 実績(KIMCOND)の決まり手内訳を掛け合わせ、上位3パターンを出す */
+  const kimRows=[];
+  for(let c=1;c<=6;c++){
+    const dist=KIMCOND[c]||{};
+    const pWin=P[c-1]/100;
+    for(const km in dist) kimRows.push({c,km,p:pWin*dist[km]});
+  }
+  kimRows.sort((a,b)=>b.p-a.p);
+  const kimTop=kimRows.slice(0,3);
+  return {top1,a1,kadoStrong,weak1,nA,mx:mxNat,gap1,est:P[0],P,ord,pos:[pp1,pp2,pp3],kimTop};
 }
 function suggestBet(x,ev){
   /* あくまで出発点となる候補。番組表の情報だけで組んだ場合の回収率は約77%で、
@@ -944,10 +953,11 @@ function makeNote(){
     const f=poolFormation(x.ev.pos,2.2);
     return `${joinNum(f.A)}-${joinNum(f.B)}-${joinNum(f.C)}（${f.list.length}点）`;
   };
+  const kimTxt=x=>(x.ev.kimTop||[]).map(r=>`${r.c}号艇${r.km}(${(r.p*100).toFixed(1)}%)`).join(" / ");
   if(fmt==="md"){
     t=`## ${head}\n\n`
-     +`| 締切 | 場 | R | ①号艇 | 推定1着率 | フォーメーション(プール220%) |\n|---|---|---|---|---|---|\n`
-     +list.map(x=>`| ${x.dl||"—"} | ${VENMAP[x.v]||x.v} | ${x.r}R | ${x.e[0].name}(${x.e[0].grade} ${(x.e[0].nat||0).toFixed(2)}) | ${x.ev.est.toFixed(1)}% | ${cumTxt(x)} |`).join("\n")
+     +`| 締切 | 場 | R | ①号艇 | 推定1着率 | 展開予想 | フォーメーション(プール220%) |\n|---|---|---|---|---|---|---|\n`
+     +list.map(x=>`| ${x.dl||"—"} | ${VENMAP[x.v]||x.v} | ${x.r}R | ${x.e[0].name}(${x.e[0].grade} ${(x.e[0].nat||0).toFixed(2)}) | ${x.ev.est.toFixed(1)}% | ${kimTxt(x)} | ${cumTxt(x)} |`).join("\n")
      +`\n\n各艇の推定1着率\n\n`
      +list.map(x=>`- ${VENMAP[x.v]||x.v}${x.r}R … ${x.ev.P.map((p,i)=>`${i+1}号艇 ${p.toFixed(0)}%`).join(" / ")}`).join("\n");
   }else{
@@ -957,10 +967,12 @@ function makeNote(){
         return `▼${x.dl||""} ${VENMAP[x.v]||x.v} ${x.r}R\n`
          +`　①${e[0].name}(${e[0].grade}・勝率${(e[0].nat||0).toFixed(2)})\n`
          +`　推定1着率 ${x.ev.P.map((p,i)=>`${i+1}号艇${p.toFixed(0)}%`).join(" ")}\n`
+         +`　展開予想 ${kimTxt(x)}\n`
          +`　フォーメーション(プール220%) ${cumTxt(x)}`;
      }).join("\n\n");
   }
   t+=`\n\n---\n※推定1着率・フォーメーションは公開データ約4.7万レースで学習・較正したモデルによるものです(進入は枠なり想定)。`
+   +`\n※展開予想は、推定1着率とコース別の決まり手実績(蓄積5.2万レース)を掛け合わせた参考値です。買い目選定の根拠としての検証はしていません。`
    +`\n※フォーメーションは、1〜3着の確率をまとめて1つの集団にし、確率が高い順に合計220%に達するまで選ぶ方式です。`
    +`同条件・出走表のみでの検証(17,732レース)では平均7.0点・的中率35.4%・回収率79.5%でした。`
    +`\n※当たることを保証するものではありません。`;
