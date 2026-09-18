@@ -108,6 +108,7 @@ footer{margin-top:28px;font-size:12px;color:var(--faint);border-top:1px solid va
     <button id="tab3" onclick="showTab(3)">番組表からおすすめ抽出</button>
     <button id="tab2" onclick="showTab(2)">三連単オッズ</button>
     <button id="tab4" onclick="showTab(4)">オリジナル展示(一周・まわり足・直線)</button>
+    <button id="tab5" onclick="showTab(5)">オッズ履歴(票の動き)</button>
   </div>
   <div id="pane0">
     <p class="hint">BOATRACE公式サイトの「出走表」ページを全選択(Ctrl+A / ⌘A)してコピーし、そのまま貼り付けて「解析」。級別・F数・平均ST・全国/当地勝率・モーター/ボート2連率・開催場をセットし、さらに登番から内蔵の選手データベース(全1,653名・1年分のコース別実績)を自動照合します。</p>
@@ -267,6 +268,25 @@ footer{margin-top:28px;font-size:12px;color:var(--faint);border-top:1px solid va
     <p class="hint" style="margin-top:8px">読み取った値は「1マーク先取り予想」の隊形推定に反映します(まわり足=ターン性能、直線=行き足)。<br>
     <b>この補正はまだ検証していません。</b>これまでの機能(展示タイム・進入など)は過去データで回収率を確認済みですが、
     このデータは蓄積してから効果を確かめる必要があります。今は方向性だけを反映した参考値としてご利用ください。</p>
+  </div>
+
+  <div id="pane5" style="display:none">
+    <p class="hint">オッズ履歴のページ(締切30分前〜最新の推移が並んだ表)を全選択コピーして貼り付けてください。<br>
+    オッズが下がっている組み合わせは票が集まっている(買われている)、上がっている組み合わせは票が抜けていることを示します。</p>
+    <textarea id="paste5" placeholder="オッズ履歴のページを貼り付け(締切30分前〜最新の推移)" style="min-height:120px"></textarea>
+    <div class="row" style="margin-top:8px">
+      <button class="primary" onclick="parseOddsHistory()">票の動きを解析</button>
+      <label style="font-size:12px">表示</label>
+      <select id="ohMode" class="s" onchange="renderOddsHistory()">
+        <option value="boat">艇ごとの集計</option>
+        <option value="combo">組み合わせ別(変化が大きい順)</option>
+      </select>
+      <span class="msg" id="msg5"></span>
+    </div>
+    <div class="tblwrap" style="margin-top:10px"><table id="ohTable"></table></div>
+    <p class="hint" style="margin-top:8px">
+    <b>この情報が的中率や回収率につながるかは、まだ検証していません。</b>市場の動きを読み取る材料として表示するものです。
+    「買われているから来る」とは限らず、直前情報を見た人の判断が反映されているだけの可能性もあります。</p>
   </div>
 
 </section>
@@ -672,7 +692,7 @@ for(let i=1;i<=6;i++){const d=defs[i-1];
 document.getElementById("inrows").innerHTML=rows;
 
 /* ── タブ ── */
-function showTab(n){for(let i=0;i<5;i++){const p=document.getElementById("pane"+i),b=document.getElementById("tab"+i);if(p)p.style.display=i===n?"":"none";if(b)b.classList.toggle("on",i===n);}}
+function showTab(n){for(let i=0;i<6;i++){const p=document.getElementById("pane"+i),b=document.getElementById("tab"+i);if(p)p.style.display=i===n?"":"none";if(b)b.classList.toggle("on",i===n);}}
 
 /* ── 取り込みパーサ ── */
 function norm(t){return t.replace(/[０-９．]/g,c=>String.fromCharCode(c.charCodeAt(0)-0xFEE0)).replace(/[－―−‐﹣]/g,"-").replace(/[：]/g,":").replace(/\u3000/g," ").replace(/\t/g," ");}
@@ -1367,6 +1387,85 @@ function parseOriginalBlockFmt(t){
     rows.push({w:+m[1],tilt:+m[2],ex:+m[3],lap:+m[4],turn:+m[5],straight:+m[6]});
   }
   return rows.length?rows:null;
+}
+let OHDATA=[];   /* [{c:"1-2-3", odds:[最新,5分前,10分前,20分前,30分前], chg:変化率%}] */
+function parseOddsHistory(){
+  const raw=document.getElementById("paste5").value;
+  if(!raw.trim()){setMsg("msg5","貼り付け内容がありません",false);return;}
+  const t=norm(raw);
+  const lines=t.split(/\r?\n/);
+  OHDATA=[];
+  let head1=null, head2=null;
+  for(const line of lines){
+    const parts=line.split(/[\t 　]+/).map(x=>x.trim()).filter(x=>x.length);
+    if(!parts.length) continue;
+    /* 「最新」「締切5分前」などの見出し行の直前にある単独の艇番号を1着として拾う */
+    const nums=parts.filter(p=>/^\d+\.\d$/.test(p));
+    const labels=parts.filter(p=>/^[1-6]$/.test(p));
+    if(line.indexOf("最新")>=0){
+      if(labels.length) head1=labels[0];   /* この行に1着艇番があるパターン */
+      continue;
+    }
+    if(nums.length<5) continue;
+    /* 数値5つの前にある艇番ラベルで2着・3着を決める */
+    if(labels.length>=2){ head2=labels[0]; }
+    const third=labels.length>=2?labels[1]:(labels.length===1?labels[0]:null);
+    if(!head1||!head2||!third) continue;
+    if(head1===head2||head2===third||head1===third) continue;
+    const o=nums.slice(0,5).map(Number);
+    OHDATA.push({c:`${head1}-${head2}-${third}`, odds:o});
+  }
+  if(!OHDATA.length){
+    setMsg("msg5","読み取れませんでした。オッズ履歴のページを貼り付けてください(締切30分前〜最新の推移が必要です)",false);
+    return;
+  }
+  /* 変化率: (30分前 - 最新) / 30分前 × 100。プラスならオッズが下がった=買われている */
+  OHDATA.forEach(r=>{
+    const now=r.odds[0], old=r.odds[r.odds.length-1];
+    r.chg=(old>0)?((old-now)/old*100):0;
+  });
+  setMsg("msg5",`${OHDATA.length}件の組み合わせを読み取りました`,true);
+  renderOddsHistory();
+}
+function renderOddsHistory(){
+  const el=document.getElementById("ohTable");
+  if(!el||!OHDATA.length)return;
+  const mode=document.getElementById("ohMode").value;
+  const chip=i=>`<span class="chip" style="width:18px;height:18px;font-size:11px;background:${BC[i-1]};color:${BT[i-1]}">${i}</span>`;
+  const cls=v=>v>=10?"evpos":(v<=-10?"evneg":"");
+  let h="";
+  if(mode==="combo"){
+    const rows=[...OHDATA].sort((a,b)=>b.chg-a.chg);
+    h='<thead><tr><th>組番</th><th class="num">最新</th><th class="num">30分前</th><th class="num">変化</th><th>動き</th></tr></thead><tbody>';
+    rows.slice(0,30).forEach(r=>{
+      const n=r.c.split("-").map(Number);
+      h+=`<tr><td>${n.map(chip).join('<span style="color:var(--faint)">-</span>')}</td>`
+       +`<td class="num">${r.odds[0].toFixed(1)}</td><td class="num" style="color:var(--faint)">${r.odds[4].toFixed(1)}</td>`
+       +`<td class="num ${cls(r.chg)}">${r.chg>=0?"+":""}${r.chg.toFixed(1)}%</td>`
+       +`<td style="font-size:11px">${r.chg>=10?"買われている":(r.chg<=-10?"票が抜けている":"横ばい")}</td></tr>`;
+    });
+  }else{
+    /* 艇ごと: その艇が絡む組み合わせの変化率を、1着・2着・3着の位置別に平均する */
+    const agg={};
+    for(let i=1;i<=6;i++) agg[i]={p1:[],p2:[],p3:[]};
+    OHDATA.forEach(r=>{
+      const [a,b,c]=r.c.split("-").map(Number);
+      if(agg[a])agg[a].p1.push(r.chg);
+      if(agg[b])agg[b].p2.push(r.chg);
+      if(agg[c])agg[c].p3.push(r.chg);
+    });
+    const avg=arr=>arr.length?arr.reduce((x,y)=>x+y,0)/arr.length:null;
+    h='<thead><tr><th>艇</th><th class="num">1着で買われ度</th><th class="num">2着で</th><th class="num">3着で</th><th>総合</th></tr></thead><tbody>';
+    for(let i=1;i<=6;i++){
+      const a1=avg(agg[i].p1), a2=avg(agg[i].p2), a3=avg(agg[i].p3);
+      const all=[...agg[i].p1,...agg[i].p2,...agg[i].p3];
+      const at=avg(all);
+      const fmt=v=>v===null?'<span style="color:var(--faint)">—</span>':`<span class="${cls(v)}">${v>=0?"+":""}${v.toFixed(1)}%</span>`;
+      h+=`<tr><td>${chip(i)}</td><td class="num">${fmt(a1)}</td><td class="num">${fmt(a2)}</td><td class="num">${fmt(a3)}</td>`
+       +`<td style="font-size:11px">${at===null?"—":(at>=8?"買われている":(at<=-8?"票が抜けている":"横ばい"))}</td></tr>`;
+    }
+  }
+  el.innerHTML=h+"</tbody>";
 }
 function parseOriginal(){
   const raw=document.getElementById("paste4").value;
