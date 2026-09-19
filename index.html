@@ -285,6 +285,16 @@ footer{margin-top:28px;font-size:12px;color:var(--faint);border-top:1px solid va
     </div>
     <p class="hint" id="ohBase" style="margin:8px 0 0"></p>
     <div class="tblwrap" style="margin-top:6px"><table id="ohTable"></table></div>
+    <div class="row" style="margin-top:10px;padding-top:10px;border-top:1px solid var(--line)">
+      <button class="primary" onclick="pickByOddsChange()">変化が大きい順に選出(合成3倍以上を維持)</button>
+      <span class="msg" id="msgOhPick"></span>
+    </div>
+    <div id="ohPickOut" class="tblwrap" style="margin-top:8px"></div>
+    <div class="row" style="margin-top:8px">
+      <button onclick="makeOhNote()">記事用テキストを作る</button>
+      <button onclick="copyOhNote()">コピー</button>
+    </div>
+    <textarea id="ohNoteOut" style="min-height:140px;margin-top:8px;font-family:ui-monospace,monospace;font-size:12px;display:none"></textarea>
     <p class="hint" style="margin-top:8px">
     <b>この情報が的中率や回収率につながるかは、まだ検証していません。</b>市場の動きを読み取る材料として表示するものです。
     「買われているから来る」とは限らず、直前情報を見た人の判断が反映されているだけの可能性もあります。</p>
@@ -1504,6 +1514,59 @@ function renderOddsHistory(){
   if(note) note.textContent=`得票シェアは、各時点のオッズの逆数を全${OHDATA.length}通りで正規化した推定値です(オッズ=払戻対象額÷票数という関係を利用)。`
     +`比較の基準は「${oldLabel}」です(30分前はオッズが未確定で0のことがあるため、20分前を優先しています)。`
     +`母数(発売総額)の増減とは切り離して、票がどこに集まっているかだけを表します。合計は常に100%になります。`;
+}
+let OHPICK=[];   /* 選出された組み合わせ(オッズ変化が大きい順・合成3倍まで) */
+function pickByOddsChange(){
+  if(!OHDATA.length){setMsg("msgOhPick","先に「票の動きを解析」を実行してください",false);return;}
+  const budget=3.0;
+  const sorted=[...OHDATA].sort((a,b)=>(b.shareDelta||0)-(a.shareDelta||0));
+  const picked=[];
+  let invSum=0;
+  /* 変化が大きい順に1点ずつ追加する。次の1点を加えると合成オッズが閾値を下回ってしまう場合は、
+     その点を加えずに止める(常に合成オッズが閾値以上を保つ範囲で最大まで選ぶ)。 */
+  for(const r of sorted){
+    const newInvSum=invSum+1/r.odds[0];
+    if(picked.length>0 && (1/newInvSum)<budget) break;
+    picked.push(r); invSum=newInvSum;
+  }
+  OHPICK=picked;
+  const syn=1/invSum;
+  const chip=i=>`<span class="chip" style="width:18px;height:18px;font-size:11px;background:${BC[i-1]};color:${BT[i-1]}">${i}</span>`;
+  let h='<table><thead><tr><th>組番</th><th class="num">最新オッズ</th><th class="num">得票シェア変化</th></tr></thead><tbody>';
+  picked.forEach(r=>{
+    const n=r.c.split("-").map(Number);
+    h+=`<tr><td>${n.map(chip).join('<span style="color:var(--faint)">-</span>')}</td>`
+     +`<td class="num">${r.odds[0].toFixed(1)}倍</td>`
+     +`<td class="num">${r.shareDelta>=0?"+":""}${(r.shareDelta*100).toFixed(2)}pt</td></tr>`;
+  });
+  h+="</tbody></table>";
+  document.getElementById("ohPickOut").innerHTML=h;
+  setMsg("msgOhPick",`${picked.length}点・合成オッズ${syn.toFixed(2)}倍で選出しました`,true);
+}
+function makeOhNote(){
+  if(!OHPICK.length){setMsg("msgOhPick","先に「変化が大きい順に選出」を実行してください",false);return;}
+  const venue=VENMAP[gv("venue")]||gv("venue")||"";
+  const rno=gv("rno")||"";
+  const invSum=OHPICK.reduce((s,r)=>s+1/r.odds[0],0);
+  const syn=1/invSum;
+  const oldLabel=(typeof OHHeaders!=="undefined"&&OHHeaders.length)?OHHeaders[OHHeaders.findIndex(lb=>/20分/.test(lb))>=0?OHHeaders.findIndex(lb=>/20分/.test(lb)):OHHeaders.length-1]:"";
+  let t=`【${venue}${rno?rno+"R":""} オッズの動きから見た買い目】\n\n`
+   +`直前の得票シェアが伸びている順に、合成オッズが3倍を下回らない範囲で拾いました(${OHPICK.length}点・合成${syn.toFixed(2)}倍)。\n\n`;
+  OHPICK.forEach(r=>{
+    t+=`▼${r.c}　最新${r.odds[0].toFixed(1)}倍(${oldLabel}比 ${r.shareDelta>=0?"+":""}${(r.shareDelta*100).toFixed(2)}pt)\n`;
+  });
+  t+=`\n合成オッズ ${syn.toFixed(2)}倍\n`
+   +`\n---\n※得票シェアは、各時点のオッズの逆数を全組み合わせで正規化した推定値です。`
+   +`この並びが的中率や回収率につながるかは検証していません。市場の動きを読み取る参考情報です。`;
+  const box=document.getElementById("ohNoteOut");
+  box.style.display=""; box.value=t;
+  setMsg("msgOhPick","記事用テキストを作成しました",true);
+}
+function copyOhNote(){
+  const box=document.getElementById("ohNoteOut");
+  if(!box.value){setMsg("msgOhPick","先に記事用テキストを作ってください",false);return;}
+  box.select(); document.execCommand("copy");
+  setMsg("msgOhPick","コピーしました",true);
 }
 function parseOriginal(){
   const raw=document.getElementById("paste4").value;
