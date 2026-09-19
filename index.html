@@ -1389,7 +1389,8 @@ function parseOriginalBlockFmt(t){
   }
   return rows.length?rows:null;
 }
-let OHDATA=[];   /* [{c:"1-2-3", odds:[最新,5分前,10分前,20分前,30分前], chg:変化率%}] */
+let OHDATA=[];      /* [{c:"1-2-3", odds:[最新,5分前,10分前,20分前,...]}] */
+let OHHeaders=[];   /* 各列のラベル(例: ["最新","締切20分前","締切30分前"]) */
 function parseOddsHistory(){
   const raw=document.getElementById("paste5").value;
   if(!raw.trim()){setMsg("msg5","貼り付け内容がありません",false);return;}
@@ -1398,13 +1399,14 @@ function parseOddsHistory(){
   OHDATA=[];
   let head1=null, head2=null, ncol=5;   /* ncol: 列数(最新〜締切◯分前)。締切間際は列が減ることがあるため見出し行から毎回数え直す */
   for(const line of lines){
-    /* 見出し行: 「最新」を含む行。列数はこの行のトークン数-1(1着艇の分)で決まる。
+    /* 見出し行: 「最新」を含む行。列数・列ラベルはこの行から毎回読み取り直す(最初に見つかった見出し行を採用)。
        行頭のトークンだけを1着艇として扱う(「締切5分前」等の数字と混同しないため)。 */
     if(line.indexOf("最新")>=0){
       const parts=line.trim().split(/[\t 　]+/).filter(x=>x.length);
       const first=parts[0];
       if(/^[1-6]$/.test(first)) head1=first;
       ncol=Math.max(1,parts.length-1);
+      if(!OHHeaders.length) OHHeaders=parts.slice(1,1+ncol);
       head2=null;
       continue;
     }
@@ -1441,55 +1443,67 @@ function renderOddsHistory(){
   if(!el||!OHDATA.length)return;
   const mode=document.getElementById("ohMode").value;
   const chip=i=>`<span class="chip" style="width:18px;height:18px;font-size:11px;background:${BC[i-1]};color:${BT[i-1]}">${i}</span>`;
-  const median=a=>{ if(!a.length)return null; const b=[...a].sort((x,y)=>x-y); const m=b.length>>1;
-    return b.length%2?b[m]:(b[m-1]+b[m])/2; };
-  /* レース全体の基準(中央値)。全体が売られている相場でも、相対的に買われている艇を見分けるため */
-  const base=median(OHDATA.map(r=>r.chg))||0;
-  const cls=v=>v>=8?"evpos":(v<=-8?"evneg":"");
+  /* オッズの逆数を全組み合わせで正規化し、各時点の「推定得票シェア」を求める。
+     母数(発売総額)の増減とは切り離して、どこに票が集まっているかだけを見られる。 */
+  const ncol=OHDATA[0].odds.length;
+  const shareAt=ti=>{
+    const inv=OHDATA.map(r=>r.odds[ti]>0?1/r.odds[ti]:0);
+    const tot=inv.reduce((a,b)=>a+b,0)||1;
+    return inv.map(v=>v/tot);
+  };
+  /* 基準時点は「締切20分前」を優先する(30分前は発売開始直後でオッズが0のことがあるため)。
+     見つからなければ、0でない値が最も揃っている列の中で一番古いものを使う。 */
+  let oldIdx=OHHeaders.findIndex(lb=>/20分/.test(lb));
+  if(oldIdx<0){
+    for(let i=ncol-1;i>=0;i--){
+      if(OHDATA.every(r=>r.odds[i]>0)){ oldIdx=i; break; }
+    }
+    if(oldIdx<0) oldIdx=ncol-1;
+  }
+  const sNow=shareAt(0), sOld=shareAt(oldIdx);
+  OHDATA.forEach((r,i)=>{ r.shareNow=sNow[i]; r.shareOld=sOld[i]; r.shareDelta=sNow[i]-sOld[i]; });
+  const cls=v=>v>=0.3?"evpos":(v<=-0.3?"evneg":"");
   let h="";
   if(mode==="combo"){
-    const rows=[...OHDATA].sort((a,b)=>b.chg-a.chg);
-    h='<thead><tr><th>組番</th><th class="num">最新</th><th class="num">30分前</th><th class="num">変化</th><th class="num">全体比</th></tr></thead><tbody>';
+    const rows=[...OHDATA].sort((a,b)=>b.shareDelta-a.shareDelta);
+    h='<thead><tr><th>組番</th><th class="num">最新</th><th class="num">30分前</th><th class="num">得票シェア</th><th class="num">変化</th></tr></thead><tbody>';
     rows.slice(0,30).forEach(r=>{
       const n=r.c.split("-").map(Number);
-      const rel=r.chg-base;
       h+=`<tr><td>${n.map(chip).join('<span style="color:var(--faint)">-</span>')}</td>`
-       +`<td class="num">${r.odds[0].toFixed(1)}</td><td class="num" style="color:var(--faint)">${r.odds[4].toFixed(1)}</td>`
-       +`<td class="num">${r.chg>=0?"+":""}${r.chg.toFixed(1)}%</td>`
-       +`<td class="num ${cls(rel)}">${rel>=0?"+":""}${rel.toFixed(1)}</td></tr>`;
+       +`<td class="num">${r.odds[0].toFixed(1)}</td><td class="num" style="color:var(--faint)">${r.odds[oldIdx].toFixed(1)}</td>`
+       +`<td class="num">${(r.shareNow*100).toFixed(2)}%</td>`
+       +`<td class="num ${cls(r.shareDelta*100)}">${r.shareDelta>=0?"+":""}${(r.shareDelta*100).toFixed(2)}pt</td></tr>`;
     });
     h+="</tbody>";
   }else{
-    /* 艇ごと: 中央値で集計し、レース全体の基準との差(全体比)で買われ度を判定する */
+    /* 艇ごと: 1着/2着/3着それぞれの位置に来る組み合わせの得票シェアを合計する。
+       これは「その艇がその着順に来る」ことに賭けられた票の推定割合そのもの。 */
     const agg={};
-    for(let i=1;i<=6;i++) agg[i]={p1:[],p2:[],p3:[]};
+    for(let i=1;i<=6;i++) agg[i]={now:[0,0,0],old:[0,0,0]};
     OHDATA.forEach(r=>{
       const [a,b,c]=r.c.split("-").map(Number);
-      if(agg[a])agg[a].p1.push(r.chg);
-      if(agg[b])agg[b].p2.push(r.chg);
-      if(agg[c])agg[c].p3.push(r.chg);
+      agg[a].now[0]+=r.shareNow; agg[a].old[0]+=r.shareOld;
+      agg[b].now[1]+=r.shareNow; agg[b].old[1]+=r.shareOld;
+      agg[c].now[2]+=r.shareNow; agg[c].old[2]+=r.shareOld;
     });
-    h='<thead><tr><th>艇</th><th class="num">1着で</th><th class="num">2着で</th><th class="num">3着で</th><th class="num">総合</th><th>判定</th></tr></thead><tbody>';
-    const totals=[];
+    h='<thead><tr><th>艇</th><th class="num">1着シェア</th><th class="num">2着シェア</th><th class="num">3着シェア</th><th class="num">絡み合計の変化</th><th>判定</th></tr></thead><tbody>';
     for(let i=1;i<=6;i++){
-      const all=[...agg[i].p1,...agg[i].p2,...agg[i].p3];
-      totals.push({i, v: all.length?median(all)-base : null});
-    }
-    for(let i=1;i<=6;i++){
-      const m1=median(agg[i].p1), m2=median(agg[i].p2), m3=median(agg[i].p3);
-      const t=totals.find(x=>x.i===i).v;
-      const fmt=v=>v===null?'<span style="color:var(--faint)">—</span>'
-        :`<span class="${cls(v-base)}">${(v-base)>=0?"+":""}${(v-base).toFixed(1)}</span>`;
-      h+=`<tr><td>${chip(i)}</td><td class="num">${fmt(m1)}</td><td class="num">${fmt(m2)}</td><td class="num">${fmt(m3)}</td>`
-       +`<td class="num ${t===null?"":cls(t)}">${t===null?"—":((t>=0?"+":"")+t.toFixed(1))}</td>`
-       +`<td style="font-size:11px">${t===null?"—":(t>=8?"買われている":(t<=-8?"売られている":"平均並み"))}</td></tr>`;
+      const a=agg[i];
+      const totNow=a.now.reduce((x,y)=>x+y,0), totOld=a.old.reduce((x,y)=>x+y,0);
+      const delta=(totNow-totOld)*100;
+      const fmt=(now)=>`${(now*100).toFixed(1)}%`;
+      h+=`<tr><td>${chip(i)}</td><td class="num">${fmt(a.now[0])}</td><td class="num">${fmt(a.now[1])}</td><td class="num">${fmt(a.now[2])}</td>`
+       +`<td class="num ${cls(delta)}">${delta>=0?"+":""}${delta.toFixed(2)}pt</td>`
+       +`<td style="font-size:11px">${delta>=0.5?"買われている":(delta<=-0.5?"売られている":"横ばい")}</td></tr>`;
     }
     h+="</tbody>";
   }
   el.innerHTML=h;
   const note=document.getElementById("ohBase");
-  if(note) note.textContent=`このレース全体のオッズ変化(中央値)は ${base>=0?"+":""}${base.toFixed(1)}% です。`
-    +`表の数値は全体比(この基準との差)で、プラスなら全体より買われている、マイナスなら売られていることを示します。`;
+  const oldLabel=OHHeaders[oldIdx]||"基準時点";
+  if(note) note.textContent=`得票シェアは、各時点のオッズの逆数を全${OHDATA.length}通りで正規化した推定値です(オッズ=払戻対象額÷票数という関係を利用)。`
+    +`比較の基準は「${oldLabel}」です(30分前はオッズが未確定で0のことがあるため、20分前を優先しています)。`
+    +`母数(発売総額)の増減とは切り離して、票がどこに集まっているかだけを表します。合計は常に100%になります。`;
 }
 function parseOriginal(){
   const raw=document.getElementById("paste4").value;
