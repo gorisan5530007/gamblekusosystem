@@ -285,10 +285,17 @@ footer{margin-top:28px;font-size:12px;color:var(--faint);border-top:1px solid va
     </div>
     <p class="hint" id="ohBase" style="margin:8px 0 0"></p>
     <div class="tblwrap" style="margin-top:6px"><table id="ohTable"></table></div>
-    <div class="row" style="margin-top:10px;padding-top:10px;border-top:1px solid var(--line)">
-      <button class="primary" onclick="pickByOddsChange()">変化が大きい順に選出(合成3倍以上を維持)</button>
+    <div class="row" style="margin-top:10px;padding-top:10px;border-top:1px solid var(--line);gap:8px;flex-wrap:wrap;align-items:center">
+      <label style="font-size:12px">合成オッズ下限</label>
+      <input type="number" id="ohSynFloor" value="3.0" step="0.1" min="1" style="width:60px">
+      <span style="font-size:12px;color:var(--sub)">倍</span>
+      <label style="font-size:12px">変化ポイント下限</label>
+      <input type="number" id="ohPtFloor" value="0.3" step="0.1" min="0" style="width:56px">
+      <span style="font-size:12px;color:var(--sub)">pt</span>
+      <button class="primary" onclick="pickByOddsChange()">この条件で選出</button>
       <span class="msg" id="msgOhPick"></span>
     </div>
+    <p class="hint" style="margin:4px 0 0">得票シェアの変化が大きい順に、①変化ポイントが下限を下回る、または②次を加えると合成オッズが下限を下回る、のいずれかに達するまで選びます。</p>
     <div id="ohPickOut" class="tblwrap" style="margin-top:8px"></div>
     <div class="row" style="margin-top:8px">
       <button onclick="makeOhNote()">記事用テキストを作る</button>
@@ -1518,19 +1525,26 @@ function renderOddsHistory(){
 let OHPICK=[];   /* 選出された組み合わせ(オッズ変化が大きい順・合成3倍まで) */
 function pickByOddsChange(){
   if(!OHDATA.length){setMsg("msgOhPick","先に「票の動きを解析」を実行してください",false);return;}
-  const budget=3.0;
+  const synFloor=Math.max(1,gv("ohSynFloor")||3.0);
+  const ptFloor=Math.max(0,gv("ohPtFloor")||0)/100;   /* pt表示は%換算前の値(0.3pt→0.003)に戻す */
   const sorted=[...OHDATA].sort((a,b)=>(b.shareDelta||0)-(a.shareDelta||0));
   const picked=[];
   let invSum=0;
-  /* 変化が大きい順に1点ずつ追加する。次の1点を加えると合成オッズが閾値を下回ってしまう場合は、
-     その点を加えずに止める(常に合成オッズが閾値以上を保つ範囲で最大まで選ぶ)。 */
+  /* 変化が大きい順に1点ずつ追加する。次の候補が「変化ポイント下限を下回る」、または
+     「加えると合成オッズが下限を下回ってしまう」のいずれかに該当したら、そこで止める。 */
   for(const r of sorted){
+    if((r.shareDelta||0)<ptFloor) break;
     const newInvSum=invSum+1/r.odds[0];
-    if(picked.length>0 && (1/newInvSum)<budget) break;
+    if(picked.length>0 && (1/newInvSum)<synFloor) break;
     picked.push(r); invSum=newInvSum;
   }
   OHPICK=picked;
-  const syn=1/invSum;
+  const syn=invSum>0?1/invSum:0;
+  if(!picked.length){
+    document.getElementById("ohPickOut").innerHTML="";
+    setMsg("msgOhPick","この条件では該当する組み合わせがありませんでした",false);
+    return;
+  }
   const chip=i=>`<span class="chip" style="width:18px;height:18px;font-size:11px;background:${BC[i-1]};color:${BT[i-1]}">${i}</span>`;
   let h='<table><thead><tr><th>組番</th><th class="num">最新オッズ</th><th class="num">得票シェア変化</th></tr></thead><tbody>';
   picked.forEach(r=>{
@@ -1550,8 +1564,10 @@ function makeOhNote(){
   const invSum=OHPICK.reduce((s,r)=>s+1/r.odds[0],0);
   const syn=1/invSum;
   const oldLabel=(typeof OHHeaders!=="undefined"&&OHHeaders.length)?OHHeaders[OHHeaders.findIndex(lb=>/20分/.test(lb))>=0?OHHeaders.findIndex(lb=>/20分/.test(lb)):OHHeaders.length-1]:"";
+  const synFloor=Math.max(1,gv("ohSynFloor")||3.0);
+  const ptFloor=Math.max(0,gv("ohPtFloor")||0);
   let t=`【${venue}${rno?rno+"R":""} オッズの動きから見た買い目】\n\n`
-   +`直前の得票シェアが伸びている順に、合成オッズが3倍を下回らない範囲で拾いました(${OHPICK.length}点・合成${syn.toFixed(2)}倍)。\n\n`;
+   +`直前の得票シェアが伸びている順に、合成オッズが${synFloor.toFixed(1)}倍・変化${ptFloor.toFixed(1)}pt を下回らない範囲で拾いました(${OHPICK.length}点・合成${syn.toFixed(2)}倍)。\n\n`;
   OHPICK.forEach(r=>{
     t+=`▼${r.c}　最新${r.odds[0].toFixed(1)}倍(${oldLabel}比 ${r.shareDelta>=0?"+":""}${(r.shareDelta*100).toFixed(2)}pt)\n`;
   });
@@ -3025,7 +3041,7 @@ function oddsEdit(inp){
 }
 
 /* ── 保存・復元 ── */
-const IDS=["venue","rno","engine","unit","topk","fixedEntry","dist","anaTop","anaTopY","anaN","anaY","fm1","fm2","fm3","wdir","widx","wspd","wave","weather","stab","wN","wL","wM","wB","wE","wS","wK","wC","topN","autoBudget","autoSynTarget","cumTh1","cumTh2","cumTh3","poolBudget"];
+const IDS=["venue","rno","engine","unit","topk","fixedEntry","dist","anaTop","anaTopY","anaN","anaY","fm1","fm2","fm3","wdir","widx","wspd","wave","weather","stab","wN","wL","wM","wB","wE","wS","wK","wC","topN","autoBudget","autoSynTarget","cumTh1","cumTh2","cumTh3","poolBudget","ohSynFloor","ohPtFloor"];
 for(let i=1;i<=6;i++)["reg","crs","cls","nat","loc","mot","bot","exh","st","f"].forEach(k=>IDS.push(k+i));
 function snapshot(){const s={odds:oddsMap,vals:{}};IDS.forEach(id=>s.vals[id]=document.getElementById(id).value);return s;}
 function apply(s){try{IDS.forEach(id=>{if(s.vals&&s.vals[id]!==undefined)document.getElementById(id).value=s.vals[id];});oddsMap=s.odds||{};}catch(e){}}
