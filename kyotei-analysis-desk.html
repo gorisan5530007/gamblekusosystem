@@ -301,6 +301,11 @@ footer{margin-top:28px;font-size:12px;color:var(--faint);border-top:1px solid va
       <span style="font-size:12px;color:var(--sub)">pt</span>
     </div>
     <div class="row" id="ohExclParams" style="margin-top:6px;gap:8px;flex-wrap:wrap;align-items:center">
+      <label style="font-size:12px">判定基準</label>
+      <select id="ohExclBasis" class="s">
+        <option value="total" selected>絡み合計(1+2+3着シェア)</option>
+        <option value="first">1着シェアのみ</option>
+      </select>
       <label style="font-size:12px">除外する艇数(下位)</label>
       <input type="number" id="ohExclN" value="1" step="1" min="1" max="5" style="width:50px">
       <span style="font-size:12px;color:var(--sub)">艇</span>
@@ -1542,7 +1547,8 @@ function renderOddsHistory(){
 let OHPICK=[];       /* 選出された組み合わせ */
 let OHPICK_MODE="excludeWorst";  /* 直近に使った抽出方法("delta" or "excludeWorst") */
 let OHPICK_EXCL=[];  /* excludeWorst方式で実際に除外された艇番号 */
-let OHPICK_EXCL_DETAIL=[];  /* [{lane, delta}] 除外艇の「1着シェア変化」実測値 */
+let OHPICK_EXCL_DETAIL=[];  /* [{lane, delta}] 除外艇のシェア変化 実測値 */
+let OHPICK_EXCL_BASIS="total";  /* 除外判定に使った基準("total"=絡み合計 / "first"=1着シェアのみ) */
 function updateOhPickModeUI(){
   const mode=document.getElementById("ohPickMode").value;
   document.getElementById("ohDeltaParams").style.display=(mode==="delta")?"":"none";
@@ -1588,20 +1594,28 @@ function pickByExcludeWorst(){
   if(!OHDATA.length){setMsg("msgOhPick","先に「票の動きを解析」を実行してください",false);return;}
   const nExcl=Math.max(1,Math.min(5,Math.round(gv("ohExclN")||1)));
   const pts=Math.max(1,Math.min(120,Math.round(gv("ohExclPts")||12)));
-  /* 艇ごとの「1着シェア」(そのレースでその艇が1着になる方に賭けられた票の推定割合)の
-     直近20分での変化を求め、下位(下がった順)からnExcl艇を除外対象にする。 */
+  const basis=document.getElementById("ohExclBasis").value;   /* "total"=絡み合計(1+2+3着) / "first"=1着シェアのみ */
+  /* 艇ごとのシェア(基準は選択式)の直近20分での変化を求め、下位(下がった順)からnExcl艇を除外対象にする。
+     "total": その艇が1着・2着・3着いずれかに来る方に賭けられた票の合計シェア。
+     "first": その艇が1着に来る方に賭けられた票のシェアのみ。 */
   const laneNow={},laneOld={};
   for(let i=1;i<=6;i++){ laneNow[i]=0; laneOld[i]=0; }
   OHDATA.forEach(r=>{
-    const first=Number(r.c.split("-")[0]);
-    laneNow[first]+=r.shareNow||0;
-    laneOld[first]+=r.shareOld||0;
+    const legs=r.c.split("-").map(Number);
+    if(basis==="total"){
+      legs.forEach(l=>{ laneNow[l]+=r.shareNow||0; laneOld[l]+=r.shareOld||0; });
+    }else{
+      const first=legs[0];
+      laneNow[first]+=r.shareNow||0;
+      laneOld[first]+=r.shareOld||0;
+    }
   });
   const laneDelta=[1,2,3,4,5,6].map(i=>({lane:i,delta:(laneNow[i]-laneOld[i])}));
   laneDelta.sort((a,b)=>a.delta-b.delta);   /* 下がった順(昇順) */
   const excludeLanes=new Set(laneDelta.slice(0,nExcl).map(x=>x.lane));
   OHPICK_EXCL=[...excludeLanes];
   OHPICK_EXCL_DETAIL=laneDelta.filter(x=>excludeLanes.has(x.lane));
+  OHPICK_EXCL_BASIS=basis;
   /* 除外艇がどの位置であれ絡む組み合わせを除いたうえで、残りを現在の得票シェア(人気)が高い順に並べて指定点数を選ぶ。 */
   const remain=OHDATA.filter(r=>{
     const legs=r.c.split("-").map(Number);
@@ -1619,7 +1633,8 @@ function pickByExcludeWorst(){
   }
   renderOhPickTable(picked,syn,true);
   const shortfall=picked.length<pts?`(指定${pts}点に対し${picked.length}点のみ該当)`:"";
-  setMsg("msgOhPick",`${OHPICK_EXCL.join("・")}号艇(1着シェア下位)を除外し${picked.length}点・合成オッズ${syn.toFixed(2)}倍で選出しました${shortfall}`,true);
+  const basisLabel=basis==="total"?"絡み合計シェア下位":"1着シェア下位";
+  setMsg("msgOhPick",`${OHPICK_EXCL.join("・")}号艇(${basisLabel})を除外し${picked.length}点・合成オッズ${syn.toFixed(2)}倍で選出しました${shortfall}`,true);
 }
 function renderOhPickTable(picked,syn,showExcl){
   const chip=i=>`<span class="chip" style="width:18px;height:18px;font-size:11px;background:${BC[i-1]};color:${BT[i-1]}">${i}</span>`;
@@ -1633,9 +1648,10 @@ function renderOhPickTable(picked,syn,showExcl){
   });
   h+="</tbody></table>";
   if(showExcl&&OHPICK_EXCL.length){
-    const detailTxt=OHPICK_EXCL_DETAIL.map(x=>`${chip(x.lane)}<span style="font-size:11px;color:var(--sub);margin-right:6px">1着シェア${x.delta>=0?"+":""}${(x.delta*100).toFixed(2)}pt</span>`).join(" ");
-    h+=`<p class="hint" style="margin-top:6px">除外した艇(1着シェアの変化が下位${OHPICK_EXCL.length}艇): ${detailTxt}<br>`
-      +`※この基準は「艇ごとの集計」表の「絡み合計の変化」(1〜3着シェアの合計)とは異なり、1着シェアのみで判定しています。</p>`;
+    const basisLabel=OHPICK_EXCL_BASIS==="total"?"絡み合計シェア(1+2+3着)":"1着シェア";
+    const detailTxt=OHPICK_EXCL_DETAIL.map(x=>`${chip(x.lane)}<span style="font-size:11px;color:var(--sub);margin-right:6px">${basisLabel}${x.delta>=0?"+":""}${(x.delta*100).toFixed(2)}pt</span>`).join(" ");
+    h+=`<p class="hint" style="margin-top:6px">除外した艇(${basisLabel}の変化が下位${OHPICK_EXCL.length}艇): ${detailTxt}<br>`
+      +`※「艇ごとの集計」表の「絡み合計の変化」列と、この基準(${basisLabel})は一致するとは限りません。</p>`;
   }
   document.getElementById("ohPickOut").innerHTML=h;
 }
@@ -1649,7 +1665,8 @@ function makeOhNote(){
   let t=`【${venue}${rno?rno+"R":""} オッズの動きから見た買い目】\n\n`;
   if(OHPICK_MODE==="excludeWorst"){
     const exclTxt=OHPICK_EXCL.length?OHPICK_EXCL.join("・")+"号艇":"";
-    t+=`直近の得票シェアが下がった${exclTxt}が絡む組み合わせを除外し、残りを現在の人気(得票シェア)が高い順に${OHPICK.length}点選びました(合成${syn.toFixed(2)}倍)。\n\n`;
+    const basisLabel=OHPICK_EXCL_BASIS==="total"?"絡み合計シェア(1+2+3着)":"1着シェア";
+    t+=`直近の${basisLabel}が下がった${exclTxt}が絡む組み合わせを除外し、残りを現在の人気(得票シェア)が高い順に${OHPICK.length}点選びました(合成${syn.toFixed(2)}倍)。\n\n`;
   }else{
     const synFloor=Math.max(1,gv("ohSynFloor")||3.0);
     const ptFloor=Math.max(0,gv("ohPtFloor")||0);
