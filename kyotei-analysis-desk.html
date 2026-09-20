@@ -309,9 +309,12 @@ footer{margin-top:28px;font-size:12px;color:var(--faint);border-top:1px solid va
       <label style="font-size:12px">除外する艇数(下位)</label>
       <input type="number" id="ohExclN" value="1" step="1" min="1" max="5" style="width:50px">
       <span style="font-size:12px;color:var(--sub)">艇</span>
-      <label style="font-size:12px">点数</label>
+      <label style="font-size:12px">点数(上限)</label>
       <input type="number" id="ohExclPts" value="12" step="1" min="1" max="120" style="width:56px">
       <span style="font-size:12px;color:var(--sub)">点</span>
+      <label style="font-size:12px">合成オッズ下限</label>
+      <input type="number" id="ohExclSynFloor" value="2.0" step="0.1" min="1" style="width:56px">
+      <span style="font-size:12px;color:var(--sub)">倍</span>
     </div>
     <div class="row" style="margin-top:8px">
       <button class="primary" onclick="pickByOddsChange()">この条件で選出</button>
@@ -1594,6 +1597,7 @@ function pickByExcludeWorst(){
   if(!OHDATA.length){setMsg("msgOhPick","先に「票の動きを解析」を実行してください",false);return;}
   const nExcl=Math.max(1,Math.min(5,Math.round(gv("ohExclN")||1)));
   const pts=Math.max(1,Math.min(120,Math.round(gv("ohExclPts")||12)));
+  const synFloor=Math.max(1,gv("ohExclSynFloor")||1);
   const basis=document.getElementById("ohExclBasis").value;   /* "total"=絡み合計(1+2+3着) / "first"=1着シェアのみ */
   /* 艇ごとのシェア(基準は選択式)の直近20分での変化を求め、下位(下がった順)からnExcl艇を除外対象にする。
      "total": その艇が1着・2着・3着いずれかに来る方に賭けられた票の合計シェア。
@@ -1622,9 +1626,17 @@ function pickByExcludeWorst(){
     return !legs.some(l=>excludeLanes.has(l));
   });
   const sorted=[...remain].sort((a,b)=>(b.shareNow||0)-(a.shareNow||0));
-  const picked=sorted.slice(0,pts);
+  /* 人気(得票シェア)が高い順に1点ずつ追加する。指定点数に達するか、
+     次を加えると合成オッズが下限を下回ってしまう場合はそこで止める(最低1点は選ぶ)。 */
+  const picked=[];
+  let invSum=0;
+  for(const r of sorted){
+    if(picked.length>=pts) break;
+    const newInvSum=invSum+1/r.odds[0];
+    if(picked.length>0 && (1/newInvSum)<synFloor) break;
+    picked.push(r); invSum=newInvSum;
+  }
   OHPICK=picked;
-  const invSum=picked.reduce((s,r)=>s+1/r.odds[0],0);
   const syn=invSum>0?1/invSum:0;
   if(!picked.length){
     document.getElementById("ohPickOut").innerHTML="";
@@ -1632,7 +1644,7 @@ function pickByExcludeWorst(){
     return;
   }
   renderOhPickTable(picked,syn,true);
-  const shortfall=picked.length<pts?`(指定${pts}点に対し${picked.length}点のみ該当)`:"";
+  const shortfall=picked.length<pts?`(上限${pts}点に対し${picked.length}点で合成オッズ下限に到達)`:"";
   const basisLabel=basis==="total"?"絡み合計シェア下位":"1着シェア下位";
   setMsg("msgOhPick",`${OHPICK_EXCL.join("・")}号艇(${basisLabel})を除外し${picked.length}点・合成オッズ${syn.toFixed(2)}倍で選出しました${shortfall}`,true);
 }
