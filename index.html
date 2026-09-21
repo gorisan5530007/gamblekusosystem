@@ -159,6 +159,8 @@ footer{margin-top:28px;font-size:12px;color:var(--faint);border-top:1px solid va
         <option value="est">推定イン1着率が高い順</option>
         <option value="est_asc">推定イン1着率が低い順</option>
         <option value="venue">場・R番順</option>
+        <option value="roi">推定回収率順(パターン別の検証値)</option>
+        <option value="pts">点数が少ない順(ガチガチ順)</option>
       </select>
       <button onclick="makeNote()">note用の記事を作る</button>
       <button onclick="document.getElementById('paste3').value='';document.getElementById('recoOut').innerHTML='';document.getElementById('fileName').textContent='B******.TXT を選択、または下に貼り付け';">クリア</button>
@@ -177,6 +179,13 @@ footer{margin-top:28px;font-size:12px;color:var(--faint);border-top:1px solid va
         <span style="display:inline-flex;align-items:center;gap:3px">
           <label style="font-size:12px">場</label>
           <select id="cu_ven" class="s"><option value="">すべて</option></select>
+        </span>
+        <span style="display:inline-flex;align-items:center;gap:3px">
+          <label style="font-size:12px">点数(プール220%)</label>
+          <input type="number" id="cu_ptslo" placeholder="下限" style="width:48px" min="1">
+          <span style="font-size:12px;color:var(--faint)">〜</span>
+          <input type="number" id="cu_ptshi" placeholder="上限" value="2" style="width:48px" min="1">
+          <span style="font-size:12px;color:var(--sub)">点</span>
         </span>
         <span style="display:inline-flex;align-items:center;gap:3px">
           <label style="font-size:12px">締切</label>
@@ -1328,7 +1337,8 @@ function buildCustom(){
     document.getElementById("progVenueRow").style.display=set.length>1?"":"none";
   }
   ["cu_pos","cu_plo","cu_phi","cu_ven","cu_tfrom","cu_tto","cu_nalo","cu_nahi",
-   "cu_stdiff_on","cu_stdiff","cu_makuri_on","cu_makuri","cu_makuri_range"].forEach(id=>{
+   "cu_stdiff_on","cu_stdiff","cu_makuri_on","cu_makuri","cu_makuri_range",
+   "cu_ptslo","cu_ptshi"].forEach(id=>{
     const el=document.getElementById(id);
     if(el&&!el.dataset.b){el.dataset.b="1";el.oninput=renderReco;el.onchange=renderReco;}
   });
@@ -1355,6 +1365,9 @@ function matchCustom(x){
   if(phi!==null&&p>+phi)return false;
   const ven=gv2("cu_ven");
   if(ven!==null&&x.v!==+ven)return false;
+  const ptslo=gv2("cu_ptslo"), ptshi=gv2("cu_ptshi");
+  if(ptslo!==null&&x.pts<+ptslo)return false;
+  if(ptshi!==null&&x.pts>+ptshi)return false;
   const tf=gv2("cu_tfrom"), tt=gv2("cu_tto");
   if((tf||tt)&&!x.dl)return false;
   if(tf&&x.dl<tf)return false;
@@ -1396,13 +1409,25 @@ function matchCustom(x){
   }
   return true;
 }
+const PATTERN_ROI={strong:75.9, kado:85.0, aare:76.8, mid:80.4};
+const PATTERN_LABEL={strong:"①が堅い",kado:"④カドが有力",aare:"①が弱い(荒れ想定)",mid:"その他(標準)"};
+function classifyPattern(ev){
+  if(ev.top1&&ev.a1) return "strong";
+  if(ev.kadoStrong) return "kado";
+  if(ev.weak1) return "aare";
+  return "mid";
+}
 function renderReco(){
   buildCustom();
   const out=document.getElementById("recoOut");
   if(!PROG.length){out.innerHTML="";return;}
   const mode=document.getElementById("recoMode").value;
   document.getElementById("customBox").style.display=mode==="custom"?"":"none";
-  let list=PROG.map(x=>({...x,ev:evalRace(x)}));
+  let list=PROG.map(x=>{
+    const ev=evalRace(x);const pat=classifyPattern(ev);
+    const pts=poolFormation(ev.pos,2.2).list.length;
+    return {...x,ev,pat,roi:PATTERN_ROI[pat],pts};
+  });
   const vset=progVenueSet();
   if(vset) list=list.filter(x=>vset.has(x.v));
   if(mode==="custom") list=list.filter(matchCustom);
@@ -1414,11 +1439,13 @@ function renderReco(){
   if(sort==="time") list.sort((a,b)=>tv(a)-tv(b)||a.v-b.v);
   else if(sort==="est") list.sort((a,b)=>b.ev.est-a.ev.est);
   else if(sort==="est_asc") list.sort((a,b)=>a.ev.est-b.ev.est);
+  else if(sort==="roi") list.sort((a,b)=>b.roi-a.roi||tv(a)-tv(b));
+  else if(sort==="pts") list.sort((a,b)=>a.pts-b.pts||tv(a)-tv(b));
   else list.sort((a,b)=>a.v-b.v||a.r-b.r);
   if(!list.length){out.innerHTML='<p class="hint">この条件に該当するレースはありません</p>';return;}
   let h='<table><thead><tr><th class="num">締切</th><th>場</th><th class="num">R</th>'
    +'<th>①号艇</th><th class="num">勝率</th><th>級</th><th class="num">A級</th>'
-   +'<th class="num">推定イン</th><th>1着率の推定(①〜⑥)</th><th>注目点</th></tr></thead><tbody>';
+   +'<th class="num">推定イン</th><th class="num">推定回収率</th><th class="num">点数</th><th>1着率の推定(①〜⑥)</th><th>注目点</th></tr></thead><tbody>';
   list.forEach(x=>{
     const e=x.e, i1=e[0], ev=x.ev;
     const tags=[];
@@ -1432,13 +1459,17 @@ function renderReco(){
       <td style="font-size:12px">${i1.name}</td><td class="num">${(i1.nat||0).toFixed(2)}</td>
       <td class="num" style="font-size:12px">${i1.grade}</td><td class="num">${ev.nA}</td>
       <td class="num" style="font-weight:500">${ev.est.toFixed(1)}%</td>
+      <td class="num" style="font-size:12px" title="${PATTERN_LABEL[x.pat]}パターンの過去1年の実測値">${x.roi.toFixed(1)}%</td>
+      <td class="num" style="font-size:12px${x.pts<=6?';color:var(--pos);font-weight:600':''}" title="プール220%方式で必要な点数">${x.pts}点</td>
       <td style="font-size:11px;white-space:nowrap;color:var(--sub)">${ev.P.map((p,i)=>
         `<span style="color:${p>=20?"var(--fg)":"var(--faint)"}">${p.toFixed(0)}</span>`).join(" / ")}</td>
       <td style="font-size:11px">${tags.join(" / ")}</td></tr>`;
   });
   out.innerHTML=h+"</tbody></table>"
    +`<p class="hint">${list.length}レース表示中(解析した全${PROG.length}レースのうち${vset?`、選択した${vset.size}会場に絞った上で`:""})。推定イン1着率は全体平均56.5%が基準です。推定1着率は47,079レースで学習・較正済みのモデルによるものです(進入は枠なり想定)。<br>
-   狙うレースを絞ったら、締切前に直前情報タブで展示タイムと進入を取り込んでから組み直してください(回収率が約4ポイント改善します)。</p>`;
+   狙うレースを絞ったら、締切前に直前情報タブで展示タイムと進入を取り込んでから組み直してください(回収率が約4ポイント改善します)。<br>
+   「推定回収率」は、各レースを①が堅い(75.9%)・カドが有力(85.0%)・荒れ想定(76.8%)・その他(80.4%)のいずれかに分類し、そのパターンの過去1年の実測回収率(プール220%方式・出走表のみ)を当てはめたものです。オッズを使った本当の期待値(市場との差)ではなく、過去の傾向を参考値として示しているだけである点にご注意ください。<br>
+   「点数」は、プール220%方式(1〜3着の確率をまとめて合計220%に達するまで拾う方式)で必要になる買い目の点数です。少ないほど、モデルの確信度が高い(荒れにくいと予想している)レースです。カスタム条件の「点数」欄で、例えば上限6点のように絞り込めます。</p>`;
 }
 let origData=[null,null,null,null,null,null];  /* [{ex,lap,turn,straight}] 号艇順 */
 function laneColumnOrder(t){
@@ -1563,7 +1594,16 @@ function loadOhOfficial(){
     return;
   }
   OHOFF=map;
-  setMsg("msg5b",`公式の直前オッズを${n}点取り込みました。「最新」はこの数字で計算します`,true);
+  /* 公式オッズのページからは場名・R番号を確実に読み取れない(場名は画像表示のため文字に含まれず、
+     R番号も現在表示中のものを見た目以外で区別できない)。代わりに、レース条件欄が入力済みなら、
+     オッズ履歴タブの会場・R欄が空のときだけそこからコピーする。 */
+  let filled="";
+  const ohV=document.getElementById("ohVenue"), ohR=document.getElementById("ohRno");
+  const mainV=document.getElementById("venue").value, mainR=document.getElementById("rno").value;
+  if(ohV&&!ohV.value&&mainV){ ohV.value=mainV; filled+=`会場=${mainV} `; }
+  if(ohR&&!ohR.value&&mainR){ ohR.value=mainR; filled+=`R=${mainR}`; }
+  autoSave();
+  setMsg("msg5b",`公式の直前オッズを${n}点取り込みました。「最新」はこの数字で計算します`+(filled?`(レース条件欄から${filled}を反映)`:``),true);
   if(OHDATA.length){ renderOddsHistory(); if(OHPICK.length) pickByOddsChange(); }
 }
 function clearOhOfficial(){
