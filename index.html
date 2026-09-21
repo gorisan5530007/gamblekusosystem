@@ -273,6 +273,13 @@ footer{margin-top:28px;font-size:12px;color:var(--faint);border-top:1px solid va
   <div id="pane5" style="display:none">
     <p class="hint">オッズ履歴のページ(締切30分前〜最新の推移が並んだ表)を全選択コピーして貼り付けてください。<br>
     オッズが下がっている組み合わせは票が集まっている(買われている)、上がっている組み合わせは票が抜けていることを示します。</p>
+    <div class="row" style="margin-bottom:6px;gap:8px;align-items:center;flex-wrap:wrap">
+      <label style="font-size:12px">会場</label>
+      <select id="ohVenue" class="s" onchange="autoSave()"></select>
+      <label style="font-size:12px">R</label>
+      <select id="ohRno" class="s" onchange="autoSave()" style="width:62px"></select>
+      <span style="font-size:11px;color:var(--faint)">記事の見出しに使います(空欄ならレース条件欄の値)</span>
+    </div>
     <textarea id="paste5" placeholder="オッズ履歴のページを貼り付け(締切30分前〜最新の推移)" style="min-height:120px"></textarea>
     <div class="row" style="margin-top:8px">
       <button class="primary" onclick="parseOddsHistory()">票の動きを解析</button>
@@ -283,12 +290,54 @@ footer{margin-top:28px;font-size:12px;color:var(--faint);border-top:1px solid va
       </select>
       <span class="msg" id="msg5"></span>
     </div>
+    <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--line)">
+      <p class="hint" style="margin:0 0 6px"><b>直前オッズは公式サイトから(推奨)</b> — 締切直前に公式サイトの3連単オッズページを全選択コピーして貼り付けると、「最新」をボートレース日和の数字の代わりに公式の直前オッズで計算します。比較の基準(20分前)はボートレース日和の列をそのまま使います。<br>
+      蓄積データ198レースの検証では、最新を直前オッズにした場合の回収率95.5%に対し、5分前だと85.3%、10分前だと70.1%に下がりました。</p>
+      <textarea id="paste5b" placeholder="公式サイトの3連単オッズページ(締切直前)を貼り付け(任意)" style="min-height:80px"></textarea>
+      <div class="row" style="margin-top:6px">
+        <button class="primary" onclick="loadOhOfficial()">公式の直前オッズを取り込む</button>
+        <button onclick="clearOhOfficial()">公式オッズをクリア</button>
+        <span class="msg" id="msg5b"></span>
+      </div>
+    </div>
     <p class="hint" id="ohBase" style="margin:8px 0 0"></p>
     <div class="tblwrap" style="margin-top:6px"><table id="ohTable"></table></div>
-    <div class="row" style="margin-top:10px;padding-top:10px;border-top:1px solid var(--line)">
-      <button class="primary" onclick="pickByOddsChange()">変化が大きい順に選出(合成3倍以上を維持)</button>
+    <div class="row" style="margin-top:10px;padding-top:10px;border-top:1px solid var(--line);gap:8px;flex-wrap:wrap;align-items:center">
+      <label style="font-size:12px">抽出方法</label>
+      <select id="ohPickMode" class="s" onchange="updateOhPickModeUI()">
+        <option value="delta">得票シェア変化が大きい順</option>
+        <option value="excludeWorst" selected>下位艇除外方式(人気上位×下位艇カット)</option>
+      </select>
+    </div>
+    <div class="row" id="ohDeltaParams" style="display:none;margin-top:6px;gap:8px;flex-wrap:wrap;align-items:center">
+      <label style="font-size:12px">合成オッズ下限</label>
+      <input type="number" id="ohSynFloor" value="3.0" step="0.1" min="1" style="width:60px">
+      <span style="font-size:12px;color:var(--sub)">倍</span>
+      <label style="font-size:12px">変化ポイント下限</label>
+      <input type="number" id="ohPtFloor" value="0.3" step="0.1" min="0" style="width:56px">
+      <span style="font-size:12px;color:var(--sub)">pt</span>
+    </div>
+    <div class="row" id="ohExclParams" style="margin-top:6px;gap:8px;flex-wrap:wrap;align-items:center">
+      <label style="font-size:12px">判定基準</label>
+      <select id="ohExclBasis" class="s">
+        <option value="total" selected>絡み合計(1+2+3着シェア)</option>
+        <option value="first">1着シェアのみ</option>
+      </select>
+      <label style="font-size:12px">除外する艇数(下位)</label>
+      <input type="number" id="ohExclN" value="1" step="1" min="1" max="5" style="width:50px">
+      <span style="font-size:12px;color:var(--sub)">艇</span>
+      <label style="font-size:12px">点数(上限)</label>
+      <input type="number" id="ohExclPts" value="12" step="1" min="1" max="120" style="width:56px">
+      <span style="font-size:12px;color:var(--sub)">点</span>
+      <label style="font-size:12px">合成オッズ下限</label>
+      <input type="number" id="ohExclSynFloor" value="2.0" step="0.1" min="1" style="width:56px">
+      <span style="font-size:12px;color:var(--sub)">倍</span>
+    </div>
+    <div class="row" style="margin-top:8px">
+      <button class="primary" onclick="pickByOddsChange()">この条件で選出</button>
       <span class="msg" id="msgOhPick"></span>
     </div>
+    <p class="hint" id="ohPickHint" style="margin:4px 0 0">直近の得票シェアが最も下がった艇(下位)が絡む組み合わせを除外したうえで、残りの中から現在の人気(得票シェア)が高い順に指定点数を選びます。</p>
     <div id="ohPickOut" class="tblwrap" style="margin-top:8px"></div>
     <div class="row" style="margin-top:8px">
       <button onclick="makeOhNote()">記事用テキストを作る</button>
@@ -627,7 +676,7 @@ const RACERC={"5139":{"1":[41,66.8,11.8,5.9],"2":[37,23.0,26.5,20.8],"3":[46,19.
 const BASEC={"1":[56.0,17.2,8.8],"2":[13.0,25.4,18.9],"3":[12.8,21.9,20.0],"4":[10.3,16.5,20.1],"5":[6.1,12.8,18.5],"6":[1.9,6.2,13.7]};
 const TENKAI={"kim":["逃げ","差し","まくり","まくり差し","抜き"],"W":[[1.3795956052264429,0.46566065395128686,-0.14774824787897978,-0.0827162686587393,0.33654797587369467,0.41358669821923233,0.125772918462624,0.3161251977018544,0.4325787297588682,-0.09760937364626428,-0.10254755730225076,0.012149375158624891,-0.11145451663629792,-0.0982540117296272,-0.09493951541961777,-0.08250779311414913,-0.9568831569386853,-1.4025521245581072,-0.026838127477787518,-0.19243057523586163,-0.05130036762958331,-0.0596340475415804,-0.6512168294223966,-0.04442140801639305,-0.33804006737795744],[-0.23063631287123326,-0.1202296475617021,0.06125757329394303,0.09933322126455223,-0.3113610743607713,0.0037742680754031892,-0.04557643527531012,-0.16715931726372726,-0.18706861929023685,0.38487429821397046,0.32992813425650036,0.12312603075980695,-0.09758149648035777,-0.17594597718138666,-0.0341940022538048,-0.03571487874156326,0.1720145674444447,0.29540164764106047,-0.2590968103118664,-0.08843386655059812,0.05456162022911328,0.022181848112962116,0.09268101815956414,0.01426240177732444,-0.05728689010546626],[-0.1795965938678688,-0.35906629625456055,0.07630629428191382,-0.007641403334645719,-0.2928658819882966,-0.06959377106098268,-0.018420143331117245,-0.06335003839644313,-0.13839744438994994,0.02204557106628691,0.00395620757846182,0.03830949811722948,0.03638331450976233,-0.04393097773315409,0.29948047841270725,0.03361030920286864,0.45603047435318483,0.5286465539489048,0.4415319406316483,0.09845402265060613,0.07724479379695762,0.1216235409472564,0.2548077404471949,0.01648590271951408,0.3848668469112698],[-0.25502928029754024,0.005639704723802499,0.01192563978232059,-0.14663977330383732,0.2631660192095046,-0.34791938040172166,-0.026631170827368836,0.036051419174073535,-0.029035137963791455,-0.29155594414791863,-0.23001822030653227,-0.12271265347389983,0.1889768077432642,0.31264018104021685,0.004706588837329982,0.06476333956758246,0.20657815876665578,0.35075213108837017,0.04337277407387784,0.24459982926304719,-0.041938015349872064,-0.05718919062771212,0.15798360246514115,0.040396810515772215,0.13710355485817471],[-0.714333418189803,0.007995585141173106,-0.0017412594791984353,0.13766422403266917,0.004512961265868427,0.00015218516806894683,-0.03514516902882738,-0.1216672612157577,-0.07807752811488937,-0.017754551486074615,-0.001318564226179366,-0.05087225056176139,-0.016324109136371136,0.005490785603951213,-0.175053549576615,0.019849023085261354,0.12225995637439967,0.22775179187977304,-0.19896977691587212,-0.06218941012719353,-0.03856803104661601,-0.026982150890925795,0.1457444683504963,-0.02672370699621788,-0.12664344428602087]]};
 const POPROI={"1":[10.907,77.4],"2":[8.755,79.0],"3":[6.725,75.0],"4":[5.867,78.0],"5":[5.005,78.6],"6":[4.386,76.6],"7":[3.96,80.0],"8":[3.347,75.4],"9":[3.238,81.5],"10":[2.728,75.1],"11":[2.608,79.0],"12":[2.339,76.7],"13":[2.14,77.2],"14":[1.958,75.7],"15":[1.761,73.6],"16":[1.669,76.1],"17":[1.51,73.0],"18":[1.405,71.9],"19":[1.352,73.4],"20":[1.243,71.9],"21":[1.131,68.6],"22":[1.09,69.7],"23":[1.096,75.2],"24":[0.982,70.4],"25":[0.936,71.0],"26":[0.938,74.0],"27":[0.895,72.9],"28":[0.858,73.0],"29":[0.748,68.2],"30":[0.748,70.4],"31":[0.639,65.1],"32":[0.718,72.3],"33":[0.676,72.6],"34":[0.615,67.6],"35":[0.639,73.7],"36":[0.514,59.5],"37":[0.488,61.8],"38":[0.488,64.4],"39":[0.542,75.1],"40":[0.473,67.2],"41":[0.451,64.4],"42":[0.442,71.2],"43":[0.472,73.4],"44":[0.448,71.7],"45":[0.389,68.1],"46":[0.35,61.5],"47":[0.383,68.6],"48":[0.374,68.1],"49":[0.311,56.0],"50":[0.376,74.9],"51":[0.348,72.2],"52":[0.315,62.3],"53":[0.3,62.9],"54":[0.287,67.1],"55":[0.267,61.3],"56":[0.276,73.5],"57":[0.276,68.4],"58":[0.243,59.9],"59":[0.263,65.3],"60":[0.26,66.3],"61":[0.254,74.0],"62":[0.219,63.8],"63":[0.228,63.0],"64":[0.216,62.5],"65":[0.212,65.4],"66":[0.201,63.2],"67":[0.186,61.2],"68":[0.175,51.9],"69":[0.158,50.6],"70":[0.195,64.5],"71":[0.146,51.4],"72":[0.168,56.9],"73":[0.138,52.4],"74":[0.123,42.0],"75":[0.153,54.0],"76":[0.127,48.6],"77":[0.127,56.6],"78":[0.146,61.7],"79":[0.12,52.6],"80":[0.116,55.9],"81":[0.125,60.2],"82":[0.129,64.5],"83":[0.114,53.0],"84":[0.123,60.0],"85":[0.087,44.8],"86":[0.083,42.7],"87":[0.094,51.7],"88":[0.072,38.7],"89":[0.087,46.7],"90":[0.083,48.8],"91":[0.068,40.4],"92":[0.072,54.8],"93":[0.076,47.3],"94":[0.087,58.2],"95":[0.055,36.4],"96":[0.061,48.9],"97":[0.052,40.4],"98":[0.057,38.5],"99":[0.063,53.5],"100":[0.07,49.5],"101":[0.063,47.0],"102":[0.053,48.3],"103":[0.05,48.9],"104":[0.039,35.0],"105":[0.053,58.8],"106":[0.035,34.1],"107":[0.046,45.3],"108":[0.02,18.2],"109":[0.041,41.8],"110":[0.041,53.9],"111":[0.033,53.9],"112":[0.026,35.4],"113":[0.018,17.2],"114":[0.013,15.9],"115":[0.031,34.4],"116":[0.022,38.4],"117":[0.029,41.5],"118":[0.035,52.8],"119":[0.028,40.6],"120":[0.022,42.5]};
-const MODEL={"names":["進入1","進入2","進入3","進入4","進入5","進入6","進入変更","全国勝率","勝率(相対)","当地勝率","当地未走","M2連","M2連(相対)","B2連","A1級","A2級","B1級","年齢","体重","展示T(相対)","展示T(絶対)","進入1×風","進入2×風","進入3×風","進入4×風","進入5×風","進入6×風","進入1×波","進入2×波","進入3×波","進入4×波","進入5×波","進入6×波"],"w":[1.2297438857616083,0.16141117547592912,0.07674047887776562,-0.1307061399809145,-0.4149498589585025,-0.9222395411757724,0.08327321456311088,0.404004126693303,0.40400414797977385,0.14696327362374614,-0.07087029192094829,0.07773585620549298,0.07773587602327209,0.02226743691551669,0.3600831512906018,0.25606254514069615,0.18712528137560488,-0.043341418387410895,0.05271493908256445,0.3834038823606537,-0.19170192737557418,-0.051071504975012776,-0.03309222693655391,0.06121156465293769,0.021239697510855467,0.034489904683948976,-0.03277743493617973,-0.1779254646071814,0.04545625503892106,-0.024517247337696408,0.016221297668983847,0.012392291391037404,0.1283728678458975]};
+const MODEL={"names":["進入1","進入2","進入3","進入4","進入5","進入6","進入変更","全国勝率","勝率(相対)","当地勝率","当地未走","M2連","M2連(相対)","B2連","A1級","A2級","B1級","年齢","体重","展示T(相対)","展示T(絶対)","進入1×風","進入2×風","進入3×風","進入4×風","進入5×風","進入6×風","進入1×波","進入2×波","進入3×波","進入4×波","進入5×波","進入6×波"],"w":[1.0693180550591543,0.004000726345235403,0.26126768283540963,-0.13544022606664996,-0.4386760060715052,-0.7604702321016392,0.05858297073153604,0.44747724968331476,0.44747706415837474,0.1620831988558018,-0.15341890644632672,0.0688615781507969,0.0688626025855585,-0.00014072980615660837,0.1781450688201139,0.04230499301710051,-0.014695719583520462,-0.09185965873359297,-0.031317237154233325,0.23343350541465413,-0.11671657642297746,0.20224625505991925,0.0018477085673468637,-0.1871437258339183,0.04819800197879767,-0.2555590954764577,0.19041085570430566,-0.2586724901074647,0.023439201554431185,-0.005604419992724654,0.06739681899292937,0.3868894744979587,-0.21344858494512223]};
 </script>
 <script>
 "use strict";
@@ -681,6 +730,16 @@ let curPos=null;
 /* ── 初期化 ── */
 let vh="";for(const k in V)vh+=`<option value="${k}"${k==="住之江"?" selected":""}>${k}(イン${V[k]}%)</option>`;
 document.getElementById("venue").innerHTML=vh;
+(function(){
+  let o='<option value="">—</option>';
+  ["桐生","戸田","江戸川","平和島","多摩川","浜名湖","蒲郡","常滑","津","三国","びわこ","住之江",
+   "尼崎","鳴門","丸亀","児島","宮島","徳山","下関","若松","芦屋","福岡","唐津","大村"]
+   .forEach(v=>{ o+=`<option value="${v}">${v}</option>`; });
+  document.getElementById("ohVenue").innerHTML=o;
+  let r='<option value="">—</option>';
+  for(let i=1;i<=12;i++) r+=`<option value="${i}">${i}R</option>`;
+  document.getElementById("ohRno").innerHTML=r;
+})();
 const defs=[[1,"A1",6.85,7.20,42,38,6.78,0.14,0],[2,"B1",5.10,4.90,35,30,6.85,0.17,0],[3,"A2",5.95,6.10,38,35,6.80,0.15,1],[4,"A1",6.40,6.05,48,44,6.75,0.14,0],[5,"B1",4.75,4.60,33,31,6.88,0.17,0],[6,"B2",4.20,4.00,30,29,6.90,0.18,0]];
 let rows="";
 for(let i=1;i<=6;i++){const d=defs[i-1];
@@ -1448,6 +1507,46 @@ function parseOddsHistory(){
   setMsg("msg5",`${OHDATA.length}件の組み合わせを読み取りました(${ncol}時点分の推移)`,true);
   renderOddsHistory();
 }
+let OHOFF={};   /* 公式サイトの直前オッズ {組番:オッズ}。空ならボートレース日和の最新列を使う */
+function parseOfficialOddsText(t){
+  const map={};
+  const add=(c,od)=>{const d=c.split("-");const v=parseFloat(od);if(d[0]!==d[1]&&d[1]!==d[2]&&d[0]!==d[2]&&v>0)map[c]=v;};
+  let heads=null;
+  for(const ln of t.split(/\n+/)){
+    const tk=ln.trim().split(/\s+/).filter(x=>x);
+    if(tk.length===18&&tk.every(isNumTok)){
+      let ok=true;for(let c=0;c<6;c++)if(!isBoatTok(tk[c*3])||!isBoatTok(tk[c*3+1]))ok=false;
+      if(ok){heads=[];for(let c=0;c<6;c++){heads[c]=tk[c*3];add((c+1)+"-"+tk[c*3]+"-"+tk[c*3+1],tk[c*3+2]);}continue;}
+    }
+    if(tk.length===12&&heads&&tk.every(isNumTok)){
+      let ok=true;for(let c=0;c<6;c++)if(!isBoatTok(tk[c*2]))ok=false;
+      if(ok){for(let c=0;c<6;c++)add((c+1)+"-"+heads[c]+"-"+tk[c*2],tk[c*2+1]);continue;}
+    }
+  }
+  const rx=/([1-6])\s*-\s*([1-6])\s*-\s*([1-6])[\s:=]*([0-9]{1,4}(?:\.[0-9])?)/g;
+  let m;while((m=rx.exec(t)))add(m[1]+"-"+m[2]+"-"+m[3],m[4]);
+  return map;
+}
+function loadOhOfficial(){
+  const t=norm(document.getElementById("paste5b").value);
+  const map=parseOfficialOddsText(t);
+  const n=Object.keys(map).length;
+  if(n<100){
+    setMsg("msg5b",`公式オッズを${n}点しか読み取れませんでした。公式サイトの3連単オッズページを全選択コピーして貼り付けてください(120点必要です)`,false);
+    return;
+  }
+  OHOFF=map;
+  setMsg("msg5b",`公式の直前オッズを${n}点取り込みました。「最新」はこの数字で計算します`,true);
+  if(OHDATA.length){ renderOddsHistory(); if(OHPICK.length) pickByOddsChange(); }
+}
+function clearOhOfficial(){
+  OHOFF={}; document.getElementById("paste5b").value="";
+  setMsg("msg5b","公式オッズをクリアしました(最新はボートレース日和の列を使います)",true);
+  if(OHDATA.length){ renderOddsHistory(); if(OHPICK.length) pickByOddsChange(); }
+}
+function ohUseOff(){ return Object.keys(OHOFF).length>=100; }
+/* 「最新」のオッズ。公式の直前オッズがあればそれを、なければボートレース日和の最新列を返す */
+function ohNow(r){ return (ohUseOff()&&OHOFF[r.c]>0)?OHOFF[r.c]:r.odds[0]; }
 function renderOddsHistory(){
   const el=document.getElementById("ohTable");
   if(!el||!OHDATA.length)return;
@@ -1470,17 +1569,19 @@ function renderOddsHistory(){
     }
     if(oldIdx<0) oldIdx=ncol-1;
   }
-  const sNow=shareAt(0), sOld=shareAt(oldIdx);
+  const invNow=OHDATA.map(r=>ohNow(r)>0?1/ohNow(r):0);
+  const totNow=invNow.reduce((a,b)=>a+b,0)||1;
+  const sNow=invNow.map(v=>v/totNow), sOld=shareAt(oldIdx);
   OHDATA.forEach((r,i)=>{ r.shareNow=sNow[i]; r.shareOld=sOld[i]; r.shareDelta=sNow[i]-sOld[i]; });
   const cls=v=>v>=0.3?"evpos":(v<=-0.3?"evneg":"");
   let h="";
   if(mode==="combo"){
     const rows=[...OHDATA].sort((a,b)=>b.shareDelta-a.shareDelta);
-    h='<thead><tr><th>組番</th><th class="num">最新</th><th class="num">30分前</th><th class="num">得票シェア</th><th class="num">変化</th></tr></thead><tbody>';
+    h='<thead><tr><th>組番</th><th class="num">${ohUseOff()?"最新(公式)":"最新"}</th><th class="num">${OHHeaders[oldIdx]||"基準"}</th><th class="num">得票シェア</th><th class="num">変化</th></tr></thead><tbody>';
     rows.slice(0,30).forEach(r=>{
       const n=r.c.split("-").map(Number);
       h+=`<tr><td>${n.map(chip).join('<span style="color:var(--faint)">-</span>')}</td>`
-       +`<td class="num">${r.odds[0].toFixed(1)}</td><td class="num" style="color:var(--faint)">${r.odds[oldIdx].toFixed(1)}</td>`
+       +`<td class="num">${ohNow(r).toFixed(1)}</td><td class="num" style="color:var(--faint)">${r.odds[oldIdx].toFixed(1)}</td>`
        +`<td class="num">${(r.shareNow*100).toFixed(2)}%</td>`
        +`<td class="num ${cls(r.shareDelta*100)}">${r.shareDelta>=0?"+":""}${(r.shareDelta*100).toFixed(2)}pt</td></tr>`;
     });
@@ -1513,51 +1614,161 @@ function renderOddsHistory(){
   const oldLabel=OHHeaders[oldIdx]||"基準時点";
   if(note) note.textContent=`得票シェアは、各時点のオッズの逆数を全${OHDATA.length}通りで正規化した推定値です(オッズ=払戻対象額÷票数という関係を利用)。`
     +`比較の基準は「${oldLabel}」です(30分前はオッズが未確定で0のことがあるため、20分前を優先しています)。`
+    +(ohUseOff()?`「最新」は公式サイトの直前オッズを使っています。`:`「最新」はボートレース日和の最新列です(公式の直前オッズを貼るとそちらを優先します)。`)
     +`母数(発売総額)の増減とは切り離して、票がどこに集まっているかだけを表します。合計は常に100%になります。`;
 }
-let OHPICK=[];   /* 選出された組み合わせ(オッズ変化が大きい順・合成3倍まで) */
+let OHPICK=[];       /* 選出された組み合わせ */
+let OHPICK_MODE="excludeWorst";  /* 直近に使った抽出方法("delta" or "excludeWorst") */
+let OHPICK_EXCL=[];  /* excludeWorst方式で実際に除外された艇番号 */
+let OHPICK_EXCL_DETAIL=[];  /* [{lane, delta}] 除外艇のシェア変化 実測値 */
+let OHPICK_EXCL_BASIS="total";  /* 除外判定に使った基準("total"=絡み合計 / "first"=1着シェアのみ) */
+function updateOhPickModeUI(){
+  const mode=document.getElementById("ohPickMode").value;
+  document.getElementById("ohDeltaParams").style.display=(mode==="delta")?"":"none";
+  document.getElementById("ohExclParams").style.display=(mode==="excludeWorst")?"":"none";
+  const hint=document.getElementById("ohPickHint");
+  hint.textContent=(mode==="delta")
+    ?"得票シェアの変化が大きい順に、①変化ポイントが下限を下回る、または②次を加えると合成オッズが下限を下回る、のいずれかに達するまで選びます。"
+    :"直近の得票シェアが最も下がった艇(下位)が絡む組み合わせを除外したうえで、残りの中から現在の人気(得票シェア)が高い順に指定点数を選びます。";
+}
 function pickByOddsChange(){
+  const mode=document.getElementById("ohPickMode").value;
+  OHPICK_MODE=mode;
+  if(mode==="excludeWorst") pickByExcludeWorst();
+  else pickByDelta();
+}
+function pickByDelta(){
   if(!OHDATA.length){setMsg("msgOhPick","先に「票の動きを解析」を実行してください",false);return;}
-  const budget=3.0;
+  const synFloor=Math.max(1,gv("ohSynFloor")||3.0);
+  const ptFloor=Math.max(0,gv("ohPtFloor")||0)/100;   /* pt表示は%換算前の値(0.3pt→0.003)に戻す */
   const sorted=[...OHDATA].sort((a,b)=>(b.shareDelta||0)-(a.shareDelta||0));
   const picked=[];
   let invSum=0;
-  /* 変化が大きい順に1点ずつ追加する。次の1点を加えると合成オッズが閾値を下回ってしまう場合は、
-     その点を加えずに止める(常に合成オッズが閾値以上を保つ範囲で最大まで選ぶ)。 */
+  /* 変化が大きい順に1点ずつ追加する。次の候補が「変化ポイント下限を下回る」、または
+     「加えると合成オッズが下限を下回ってしまう」のいずれかに該当したら、そこで止める。 */
   for(const r of sorted){
-    const newInvSum=invSum+1/r.odds[0];
-    if(picked.length>0 && (1/newInvSum)<budget) break;
+    if((r.shareDelta||0)<ptFloor) break;
+    const newInvSum=invSum+1/ohNow(r);
+    if(picked.length>0 && (1/newInvSum)<synFloor) break;
     picked.push(r); invSum=newInvSum;
   }
   OHPICK=picked;
-  const syn=1/invSum;
+  OHPICK_EXCL=[];
+  const syn=invSum>0?1/invSum:0;
+  if(!picked.length){
+    document.getElementById("ohPickOut").innerHTML="";
+    setMsg("msgOhPick","この条件では該当する組み合わせがありませんでした",false);
+    return;
+  }
+  renderOhPickTable(picked,syn,false);
+  setMsg("msgOhPick",`${picked.length}点・合成オッズ${syn.toFixed(2)}倍で選出しました`,true);
+}
+function pickByExcludeWorst(){
+  if(!OHDATA.length){setMsg("msgOhPick","先に「票の動きを解析」を実行してください",false);return;}
+  const nExcl=Math.max(1,Math.min(5,Math.round(gv("ohExclN")||1)));
+  const pts=Math.max(1,Math.min(120,Math.round(gv("ohExclPts")||12)));
+  const synFloor=Math.max(1,gv("ohExclSynFloor")||1);
+  const basis=document.getElementById("ohExclBasis").value;   /* "total"=絡み合計(1+2+3着) / "first"=1着シェアのみ */
+  /* 艇ごとのシェア(基準は選択式)の直近20分での変化を求め、下位(下がった順)からnExcl艇を除外対象にする。
+     "total": その艇が1着・2着・3着いずれかに来る方に賭けられた票の合計シェア。
+     "first": その艇が1着に来る方に賭けられた票のシェアのみ。 */
+  const laneNow={},laneOld={};
+  for(let i=1;i<=6;i++){ laneNow[i]=0; laneOld[i]=0; }
+  OHDATA.forEach(r=>{
+    const legs=r.c.split("-").map(Number);
+    if(basis==="total"){
+      legs.forEach(l=>{ laneNow[l]+=r.shareNow||0; laneOld[l]+=r.shareOld||0; });
+    }else{
+      const first=legs[0];
+      laneNow[first]+=r.shareNow||0;
+      laneOld[first]+=r.shareOld||0;
+    }
+  });
+  const laneDelta=[1,2,3,4,5,6].map(i=>({lane:i,delta:(laneNow[i]-laneOld[i])}));
+  laneDelta.sort((a,b)=>a.delta-b.delta);   /* 下がった順(昇順) */
+  const excludeLanes=new Set(laneDelta.slice(0,nExcl).map(x=>x.lane));
+  OHPICK_EXCL=[...excludeLanes];
+  OHPICK_EXCL_DETAIL=laneDelta.filter(x=>excludeLanes.has(x.lane));
+  OHPICK_EXCL_BASIS=basis;
+  /* 除外艇がどの位置であれ絡む組み合わせを除いたうえで、残りを現在の得票シェア(人気)が高い順に並べて指定点数を選ぶ。 */
+  const remain=OHDATA.filter(r=>{
+    const legs=r.c.split("-").map(Number);
+    return !legs.some(l=>excludeLanes.has(l));
+  });
+  const sorted=[...remain].sort((a,b)=>(b.shareNow||0)-(a.shareNow||0));
+  /* 人気(得票シェア)が高い順に1点ずつ追加する。指定点数に達するか、
+     次を加えると合成オッズが下限を下回ってしまう場合はそこで止める(最低1点は選ぶ)。 */
+  const picked=[];
+  let invSum=0;
+  for(const r of sorted){
+    if(picked.length>=pts) break;
+    const newInvSum=invSum+1/ohNow(r);
+    if(picked.length>0 && (1/newInvSum)<synFloor) break;
+    picked.push(r); invSum=newInvSum;
+  }
+  OHPICK=picked;
+  const syn=invSum>0?1/invSum:0;
+  if(!picked.length){
+    document.getElementById("ohPickOut").innerHTML="";
+    setMsg("msgOhPick","この条件では該当する組み合わせがありませんでした(除外艇数が多すぎる可能性があります)",false);
+    return;
+  }
+  renderOhPickTable(picked,syn,true);
+  const shortfall=picked.length<pts?`(上限${pts}点に対し${picked.length}点で合成オッズ下限に到達)`:"";
+  const basisLabel=basis==="total"?"絡み合計シェア下位":"1着シェア下位";
+  setMsg("msgOhPick",`${OHPICK_EXCL.join("・")}号艇(${basisLabel})を除外し${picked.length}点・合成オッズ${syn.toFixed(2)}倍で選出しました${shortfall}`,true);
+}
+function renderOhPickTable(picked,syn,showExcl){
   const chip=i=>`<span class="chip" style="width:18px;height:18px;font-size:11px;background:${BC[i-1]};color:${BT[i-1]}">${i}</span>`;
-  let h='<table><thead><tr><th>組番</th><th class="num">最新オッズ</th><th class="num">得票シェア変化</th></tr></thead><tbody>';
+  let h='<table><thead><tr><th>組番</th><th class="num">最新オッズ</th><th class="num">得票シェア</th><th class="num">変化</th></tr></thead><tbody>';
   picked.forEach(r=>{
     const n=r.c.split("-").map(Number);
     h+=`<tr><td>${n.map(chip).join('<span style="color:var(--faint)">-</span>')}</td>`
-     +`<td class="num">${r.odds[0].toFixed(1)}倍</td>`
+     +`<td class="num">${ohNow(r).toFixed(1)}倍</td>`
+     +`<td class="num">${((r.shareNow||0)*100).toFixed(2)}%</td>`
      +`<td class="num">${r.shareDelta>=0?"+":""}${(r.shareDelta*100).toFixed(2)}pt</td></tr>`;
   });
   h+="</tbody></table>";
+  if(showExcl&&OHPICK_EXCL.length){
+    const basisLabel=OHPICK_EXCL_BASIS==="total"?"絡み合計シェア(1+2+3着)":"1着シェア";
+    const detailTxt=OHPICK_EXCL_DETAIL.map(x=>`${chip(x.lane)}<span style="font-size:11px;color:var(--sub);margin-right:6px">${basisLabel}${x.delta>=0?"+":""}${(x.delta*100).toFixed(2)}pt</span>`).join(" ");
+    h+=`<p class="hint" style="margin-top:6px">除外した艇(${basisLabel}の変化が下位${OHPICK_EXCL.length}艇): ${detailTxt}<br>`
+      +`※「艇ごとの集計」表の「絡み合計の変化」列と、この基準(${basisLabel})は一致するとは限りません。</p>`;
+  }
   document.getElementById("ohPickOut").innerHTML=h;
-  setMsg("msgOhPick",`${picked.length}点・合成オッズ${syn.toFixed(2)}倍で選出しました`,true);
 }
 function makeOhNote(){
-  if(!OHPICK.length){setMsg("msgOhPick","先に「変化が大きい順に選出」を実行してください",false);return;}
-  const venue=VENMAP[gv("venue")]||gv("venue")||"";
-  const rno=gv("rno")||"";
-  const invSum=OHPICK.reduce((s,r)=>s+1/r.odds[0],0);
+  if(!OHPICK.length){setMsg("msgOhPick","先に「この条件で選出」を実行してください",false);return;}
+  const venue=document.getElementById("ohVenue").value||document.getElementById("venue").value||"";
+  const rno=document.getElementById("ohRno").value||document.getElementById("rno").value||"";
+  const invSum=OHPICK.reduce((s,r)=>s+1/ohNow(r),0);
   const syn=1/invSum;
   const oldLabel=(typeof OHHeaders!=="undefined"&&OHHeaders.length)?OHHeaders[OHHeaders.findIndex(lb=>/20分/.test(lb))>=0?OHHeaders.findIndex(lb=>/20分/.test(lb)):OHHeaders.length-1]:"";
-  let t=`【${venue}${rno?rno+"R":""} オッズの動きから見た買い目】\n\n`
-   +`直前の得票シェアが伸びている順に、合成オッズが3倍を下回らない範囲で拾いました(${OHPICK.length}点・合成${syn.toFixed(2)}倍)。\n\n`;
+  let t=`【${venue}${rno?rno+"R":""} オッズの動きから見た買い目】\n\n`;
+  if(OHPICK_MODE==="excludeWorst"){
+    const exclTxt=OHPICK_EXCL.length?OHPICK_EXCL.join("・")+"号艇":"";
+    const basisLabel=OHPICK_EXCL_BASIS==="total"?"絡み合計シェア(1+2+3着)":"1着シェア";
+    t+=`直近の${basisLabel}が下がった${exclTxt}が絡む組み合わせを除外し、残りを現在の人気(得票シェア)が高い順に${OHPICK.length}点選びました(合成${syn.toFixed(2)}倍)。\n\n`;
+  }else{
+    const synFloor=Math.max(1,gv("ohSynFloor")||3.0);
+    const ptFloor=Math.max(0,gv("ohPtFloor")||0);
+    t+=`直前の得票シェアが伸びている順に、合成オッズが${synFloor.toFixed(1)}倍・変化${ptFloor.toFixed(1)}pt を下回らない範囲で拾いました(${OHPICK.length}点・合成${syn.toFixed(2)}倍)。\n\n`;
+  }
   OHPICK.forEach(r=>{
-    t+=`▼${r.c}　最新${r.odds[0].toFixed(1)}倍(${oldLabel}比 ${r.shareDelta>=0?"+":""}${(r.shareDelta*100).toFixed(2)}pt)\n`;
+    t+=`▼${r.c}　最新${ohNow(r).toFixed(1)}倍(${oldLabel}比 ${r.shareDelta>=0?"+":""}${(r.shareDelta*100).toFixed(2)}pt)\n`;
   });
+  /* 検証済みの条件(下位1艇除外・絡み合計・12点・合成2.0倍)と一致するときだけ検証結果を載せる */
+  const isVerified=OHPICK_MODE==="excludeWorst"&&OHPICK_EXCL_BASIS==="total"
+    &&Math.round(gv("ohExclN")||1)===1&&Math.round(gv("ohExclPts")||12)===12&&Math.abs((gv("ohExclSynFloor")||2)-2.0)<1e-9;
+  const srcTxt=ohUseOff()?`最新オッズは公式サイトの締切直前の数字、比較の基準は${oldLabel}(ボートレース日和)です。`
+                          :`最新オッズ・比較の基準ともボートレース日和の数字です。`;
+  const verTxt=isVerified
+    ?(ohUseOff()?`同じ条件を蓄積データ198レース(3日間・16会場)で検証した結果は回収率95.5%でしたが、件数が少なく確定的なものではありません。`
+                :`同じ条件の検証(198レース)では、最新が直前オッズなら回収率95.5%、5分前だと85.3%、10分前だと70.1%と、最新の時点で結果が大きく変わりました。`)
+    :`この条件が的中率や回収率につながるかは検証していません。`;
   t+=`\n合成オッズ ${syn.toFixed(2)}倍\n`
-   +`\n---\n※得票シェアは、各時点のオッズの逆数を全組み合わせで正規化した推定値です。`
-   +`この並びが的中率や回収率につながるかは検証していません。市場の動きを読み取る参考情報です。`;
+   +`\n---\n※${srcTxt}\n※得票シェアは、各時点のオッズの逆数を全組み合わせで正規化した推定値です。`
+   +verTxt+`市場の動きを読み取る参考情報です。`;
   const box=document.getElementById("ohNoteOut");
   box.style.display=""; box.value=t;
   setMsg("msgOhPick","記事用テキストを作成しました",true);
@@ -3025,7 +3236,7 @@ function oddsEdit(inp){
 }
 
 /* ── 保存・復元 ── */
-const IDS=["venue","rno","engine","unit","topk","fixedEntry","dist","anaTop","anaTopY","anaN","anaY","fm1","fm2","fm3","wdir","widx","wspd","wave","weather","stab","wN","wL","wM","wB","wE","wS","wK","wC","topN","autoBudget","autoSynTarget","cumTh1","cumTh2","cumTh3","poolBudget"];
+const IDS=["venue","rno","engine","unit","topk","fixedEntry","dist","anaTop","anaTopY","anaN","anaY","fm1","fm2","fm3","wdir","widx","wspd","wave","weather","stab","wN","wL","wM","wB","wE","wS","wK","wC","topN","autoBudget","autoSynTarget","cumTh1","cumTh2","cumTh3","poolBudget","ohSynFloor","ohPtFloor","ohVenue","ohRno"];
 for(let i=1;i<=6;i++)["reg","crs","cls","nat","loc","mot","bot","exh","st","f"].forEach(k=>IDS.push(k+i));
 function snapshot(){const s={odds:oddsMap,vals:{}};IDS.forEach(id=>s.vals[id]=document.getElementById(id).value);return s;}
 function apply(s){try{IDS.forEach(id=>{if(s.vals&&s.vals[id]!==undefined)document.getElementById(id).value=s.vals[id];});oddsMap=s.odds||{};}catch(e){}}
