@@ -137,6 +137,12 @@ footer{margin-top:28px;font-size:12px;color:var(--faint);border-top:1px solid va
       <span style="font-size:12px;color:var(--sub)" id="fileName">B******.TXT を選択、または下に貼り付け</span>
     </div>
     <textarea id="paste3" placeholder="番組表ファイル(B260907.TXT など)の中身を貼り付け" style="min-height:100px"></textarea>
+    <div class="row" id="progVenueRow" style="margin-top:6px;gap:6px;flex-wrap:wrap;align-items:center;display:none">
+      <label style="font-size:12px">会場</label>
+      <span id="progVenueBox" style="display:flex;gap:6px;flex-wrap:wrap"></span>
+      <button onclick="progVenueAll(true)" style="font-size:11px;padding:3px 8px">全選択</button>
+      <button onclick="progVenueAll(false)" style="font-size:11px;padding:3px 8px">全解除</button>
+    </div>
     <div class="row">
       <button class="primary" onclick="parseProgram()">全レースを評価する</button>
       <label style="font-size:12px">抽出</label>
@@ -1312,6 +1318,15 @@ function buildCustom(){
     const set=[...new Set(PROG.map(x=>x.v))].sort((a,b)=>a-b);
     set.forEach(n=>{const o=document.createElement("option");o.value=n;o.textContent=VENMAP[n]||n;v.appendChild(o);});
   }
+  const vb=document.getElementById("progVenueBox");
+  if(vb&&!vb.dataset.done&&PROG.length){
+    const set=[...new Set(PROG.map(x=>x.v))].sort((a,b)=>a-b);
+    let h="";
+    set.forEach(n=>{h+=`<label style="font-size:12px;display:inline-flex;align-items:center;gap:2px">`
+      +`<input type="checkbox" class="progVenueChk" value="${n}" checked onchange="autoSave();renderReco()">${VENMAP[n]||n}</label>`;});
+    vb.innerHTML=h; vb.dataset.done="1";
+    document.getElementById("progVenueRow").style.display=set.length>1?"":"none";
+  }
   ["cu_pos","cu_plo","cu_phi","cu_ven","cu_tfrom","cu_tto","cu_nalo","cu_nahi",
    "cu_stdiff_on","cu_stdiff","cu_makuri_on","cu_makuri","cu_makuri_range"].forEach(id=>{
     const el=document.getElementById(id);
@@ -1321,6 +1336,16 @@ function buildCustom(){
     const el=document.getElementById(p+c);
     if(el&&!el.dataset.b){el.dataset.b="1";el.oninput=renderReco;el.onchange=renderReco;}
   });
+}
+function progVenueAll(on){
+  document.querySelectorAll(".progVenueChk").forEach(el=>el.checked=on);
+  autoSave(); renderReco();
+}
+function progVenueSet(){
+  const boxes=[...document.querySelectorAll(".progVenueChk")];
+  if(!boxes.length) return null;   /* まだ生成されていない場合はフィルタなし扱い */
+  const on=boxes.filter(b=>b.checked).map(b=>+b.value);
+  return new Set(on);
 }
 function matchCustom(x){
   const gv2=id=>{const e=document.getElementById(id);return e&&e.value!==""?e.value:null;};
@@ -1378,6 +1403,8 @@ function renderReco(){
   const mode=document.getElementById("recoMode").value;
   document.getElementById("customBox").style.display=mode==="custom"?"":"none";
   let list=PROG.map(x=>({...x,ev:evalRace(x)}));
+  const vset=progVenueSet();
+  if(vset) list=list.filter(x=>vset.has(x.v));
   if(mode==="custom") list=list.filter(matchCustom);
   if(mode==="strong") list=list.filter(x=>x.ev.top1&&x.ev.a1);
   else if(mode==="kado") list=list.filter(x=>x.ev.kadoStrong);
@@ -1410,7 +1437,7 @@ function renderReco(){
       <td style="font-size:11px">${tags.join(" / ")}</td></tr>`;
   });
   out.innerHTML=h+"</tbody></table>"
-   +`<p class="hint">${list.length}レース表示中(解析した全${PROG.length}レースのうち)。推定イン1着率は全体平均56.5%が基準です。推定1着率は47,079レースで学習・較正済みのモデルによるものです(進入は枠なり想定)。<br>
+   +`<p class="hint">${list.length}レース表示中(解析した全${PROG.length}レースのうち${vset?`、選択した${vset.size}会場に絞った上で`:""})。推定イン1着率は全体平均56.5%が基準です。推定1着率は47,079レースで学習・較正済みのモデルによるものです(進入は枠なり想定)。<br>
    狙うレースを絞ったら、締切前に直前情報タブで展示タイムと進入を取り込んでから組み直してください(回収率が約4ポイント改善します)。</p>`;
 }
 let origData=[null,null,null,null,null,null];  /* [{ex,lap,turn,straight}] 号艇順 */
