@@ -320,17 +320,17 @@ footer{margin-top:28px;font-size:12px;color:var(--faint);border-top:1px solid va
     <div class="row" id="ohExclParams" style="margin-top:6px;gap:8px;flex-wrap:wrap;align-items:center">
       <label style="font-size:12px">判定基準</label>
       <select id="ohExclBasis" class="s">
-        <option value="total" selected>絡み合計(1+2+3着シェア)</option>
-        <option value="first">1着シェアのみ</option>
+        <option value="total">絡み合計(1+2+3着シェア)</option>
+        <option value="first" selected>1着シェアのみ</option>
       </select>
       <label style="font-size:12px">除外する艇数(下位)</label>
       <input type="number" id="ohExclN" value="1" step="1" min="1" max="5" style="width:50px">
       <span style="font-size:12px;color:var(--sub)">艇</span>
       <label style="font-size:12px">点数(上限)</label>
-      <input type="number" id="ohExclPts" value="12" step="1" min="1" max="120" style="width:56px">
+      <input type="number" id="ohExclPts" value="24" step="1" min="1" max="120" style="width:56px">
       <span style="font-size:12px;color:var(--sub)">点</span>
       <label style="font-size:12px">合成オッズ下限</label>
-      <input type="number" id="ohExclSynFloor" value="2.0" step="0.1" min="1" style="width:56px">
+      <input type="number" id="ohExclSynFloor" value="2.5" step="0.1" min="1" style="width:56px">
       <span style="font-size:12px;color:var(--sub)">倍</span>
     </div>
     <div class="row" style="margin-top:8px">
@@ -1757,15 +1757,25 @@ function makeOhNote(){
   OHPICK.forEach(r=>{
     t+=`▼${r.c}　最新${ohNow(r).toFixed(1)}倍(${oldLabel}比 ${r.shareDelta>=0?"+":""}${(r.shareDelta*100).toFixed(2)}pt)\n`;
   });
-  /* 検証済みの条件(下位1艇除外・絡み合計・12点・合成2.0倍)と一致するときだけ検証結果を載せる */
-  const isVerified=OHPICK_MODE==="excludeWorst"&&OHPICK_EXCL_BASIS==="total"
-    &&Math.round(gv("ohExclN")||1)===1&&Math.round(gv("ohExclPts")||12)===12&&Math.abs((gv("ohExclSynFloor")||2)-2.0)<1e-9;
+  /* 検証済みの2条件のどちらかと一致するときだけ、実測の結果を注記に載せる(198レースでの検証)。
+     一致しない場合は「検証していない」と正直に表示する。 */
+  const nExcl=Math.round(gv("ohExclN")||1), pts=Math.round(gv("ohExclPts")||12), syn2=gv("ohExclSynFloor")||2;
+  const isCond=(basis,n,p,sy)=>OHPICK_MODE==="excludeWorst"&&OHPICK_EXCL_BASIS===basis&&nExcl===n&&pts===p&&Math.abs(syn2-sy)<1e-9;
+  const condA=isCond("total",1,12,2.0);   // 旧デフォルト: 絡み合計・下位1艇・12点・合成2.0倍 → 回収率95.5%
+  const condB=isCond("first",1,24,2.5);   // 現デフォルト: 1着シェア・下位1艇・24点・合成2.5倍 → 回収率112.4%(的中69件)
   const srcTxt=ohUseOff()?`最新オッズは公式サイトの締切直前の数字、比較の基準は${oldLabel}(ボートレース日和)です。`
                           :`最新オッズ・比較の基準ともボートレース日和の数字です。`;
-  const verTxt=isVerified
-    ?(ohUseOff()?`同じ条件を蓄積データ198レース(3日間・16会場)で検証した結果は回収率95.5%でしたが、件数が少なく確定的なものではありません。`
-                :`同じ条件の検証(198レース)では、最新が直前オッズなら回収率95.5%、5分前だと85.3%、10分前だと70.1%と、最新の時点で結果が大きく変わりました。`)
-    :`この条件が的中率や回収率につながるかは検証していません。`;
+  let verTxt;
+  if(condA){
+    verTxt=ohUseOff()?`同じ条件を蓄積データ198レース(3日間・16会場)で検証した結果は回収率95.5%でしたが、件数が少なく確定的なものではありません。`
+                      :`同じ条件の検証(198レース)では、最新が直前オッズなら回収率95.5%、5分前だと85.3%、10分前だと70.1%と、最新の時点で結果が大きく変わりました。`;
+  }else if(condB){
+    verTxt=`同じ条件(1着シェア基準・下位1艇除外・24点・合成2.5倍)を蓄積データ198レースで検証した結果は回収率112.4%(的中69件)でしたが、`
+          +`合成オッズ・点数の組み合わせを何通りも試した中で最も良かった設定であり、他の近い設定(合成2.0〜3.0倍・点数12〜24点)でも99〜110%程度と近い数字が出ています。`
+          +`件数がまだ少なく、この数字を保証するものではありません。`;
+  }else{
+    verTxt=`この条件が的中率や回収率につながるかは検証していません。`;
+  }
   t+=`\n合成オッズ ${syn.toFixed(2)}倍\n`
    +`\n---\n※${srcTxt}\n※得票シェアは、各時点のオッズの逆数を全組み合わせで正規化した推定値です。`
    +verTxt+`市場の動きを読み取る参考情報です。`;
