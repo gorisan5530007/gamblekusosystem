@@ -1262,6 +1262,7 @@ function makeVerifyNote(){
   const invTotal=rows.reduce((a,r)=>a+r.cost,0);
   const retTotal=rows.reduce((a,r)=>a+r.ret,0);
   const roi=invTotal?(retTotal/invTotal*100):0;
+  const vFormMethodLabel={pool:"プール220%",poolExclTop:"プール220%・着率トップ除外",cum:"累積60-70-80"}[currentFormMethod()]||"プール220%";
   const head=`${fmtJDate(window.__kDate||window.__progDate)}の答え合わせ — フォーメーション(${vFormMethodLabel})は当たったか`;
   let t=`【${head}】\n\n`
    +`照合レース数 ${rows.length}件 / 的中 ${hitN}件(${(hitN/rows.length*100).toFixed(1)}%) / `
