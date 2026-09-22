@@ -150,6 +150,7 @@ footer{margin-top:28px;font-size:12px;color:var(--faint);border-top:1px solid va
         <option value="strong">1コースが堅い(勝率最高＋A1)</option>
         <option value="kado">カド(4コース)が有力</option>
         <option value="aare">荒れそう(1号艇が弱い)</option>
+        <option value="gachi">ガチガチレース(点数3点以下)</option>
         <option value="all">全レース</option>
         <option value="custom">カスタム条件</option>
       </select>
@@ -162,6 +163,12 @@ footer{margin-top:28px;font-size:12px;color:var(--faint);border-top:1px solid va
         <option value="roi">推定回収率順(パターン別の検証値)</option>
         <option value="pts">点数が少ない順(ガチガチ順)</option>
       </select>
+      <label style="font-size:12px">買い方</label>
+      <select id="progFormMethod" class="s" onchange="renderReco()">
+        <option value="pool">プール220%(標準)</option>
+        <option value="poolExclTop">プール220%(着率トップ除外・再配分)</option>
+        <option value="cum">累積60-70-80</option>
+      </select>
       <button onclick="makeNote()">note用の記事を作る</button>
       <button onclick="document.getElementById('paste3').value='';document.getElementById('recoOut').innerHTML='';document.getElementById('fileName').textContent='B******.TXT を選択、または下に貼り付け';">クリア</button>
     </div>
@@ -170,36 +177,36 @@ footer{margin-top:28px;font-size:12px;color:var(--faint);border-top:1px solid va
       <div class="row" style="gap:10px;flex-wrap:wrap;align-items:flex-start">
         <span style="display:inline-flex;align-items:center;gap:3px">
           <label style="font-size:12px">推定1着率</label>
-          <select id="cu_pos" class="s"><option value="1">①</option><option value="2">②</option><option value="3">③</option><option value="4">④</option><option value="5">⑤</option><option value="6">⑥</option></select>
-          <input type="number" id="cu_plo" placeholder="下限" style="width:56px">
+          <select id="cu_pos" class="s" onchange="renderReco()"><option value="1">①</option><option value="2">②</option><option value="3">③</option><option value="4">④</option><option value="5">⑤</option><option value="6">⑥</option></select>
+          <input type="number" id="cu_plo" placeholder="下限" style="width:56px" oninput="renderReco()">
           <span style="font-size:12px;color:var(--faint)">〜</span>
-          <input type="number" id="cu_phi" placeholder="上限" style="width:56px">
+          <input type="number" id="cu_phi" placeholder="上限" style="width:56px" oninput="renderReco()">
           <span style="font-size:12px;color:var(--sub)">%</span>
         </span>
         <span style="display:inline-flex;align-items:center;gap:3px">
           <label style="font-size:12px">場</label>
-          <select id="cu_ven" class="s"><option value="">すべて</option></select>
+          <select id="cu_ven" class="s" onchange="renderReco()"><option value="">すべて</option></select>
         </span>
         <span style="display:inline-flex;align-items:center;gap:3px">
           <label style="font-size:12px">点数(プール220%)</label>
-          <input type="number" id="cu_ptslo" placeholder="下限" style="width:48px" min="1">
+          <input type="number" id="cu_ptslo" placeholder="下限" style="width:48px" min="1" oninput="renderReco()">
           <span style="font-size:12px;color:var(--faint)">〜</span>
-          <input type="number" id="cu_ptshi" placeholder="上限" value="2" style="width:48px" min="1">
+          <input type="number" id="cu_ptshi" placeholder="上限" value="2" style="width:48px" min="1" oninput="renderReco()">
           <span style="font-size:12px;color:var(--sub)">点</span>
         </span>
         <span style="display:inline-flex;align-items:center;gap:3px">
           <label style="font-size:12px">締切</label>
-          <input type="time" id="cu_tfrom" style="width:96px">
+          <input type="time" id="cu_tfrom" style="width:96px" oninput="renderReco()">
           <span style="font-size:12px;color:var(--faint)">〜</span>
-          <input type="time" id="cu_tto" style="width:96px">
+          <input type="time" id="cu_tto" style="width:96px" oninput="renderReco()">
         </span>
       </div>
       <div class="row" style="gap:10px;flex-wrap:wrap;margin-top:6px;align-items:flex-start">
         <span style="display:inline-flex;align-items:center;gap:3px">
           <label style="font-size:12px">A級の人数</label>
-          <input type="number" id="cu_nalo" placeholder="下限" style="width:52px">
+          <input type="number" id="cu_nalo" placeholder="下限" style="width:52px" oninput="renderReco()">
           <span style="font-size:12px;color:var(--faint)">〜</span>
-          <input type="number" id="cu_nahi" placeholder="上限" style="width:52px">
+          <input type="number" id="cu_nahi" placeholder="上限" style="width:52px" oninput="renderReco()">
         </span>
         <span style="display:inline-flex;align-items:center;gap:3px" id="cuGrades"></span>
       </div>
@@ -210,7 +217,7 @@ footer{margin-top:28px;font-size:12px;color:var(--faint);border-top:1px solid va
         <span style="display:inline-flex;align-items:center;gap:3px">
           <input type="checkbox" id="cu_stdiff_on">
           <label style="font-size:12px">隣接コードより外側の平均STが</label>
-          <input type="number" id="cu_stdiff" value="0.05" step="0.01" style="width:56px">
+          <input type="number" id="cu_stdiff" value="0.05" step="0.01" style="width:56px" oninput="renderReco()">
           <span style="font-size:12px;color:var(--sub)">秒以上速い艇がいる</span>
         </span>
       </div>
@@ -218,7 +225,7 @@ footer{margin-top:28px;font-size:12px;color:var(--faint);border-top:1px solid va
         <span style="display:inline-flex;align-items:center;gap:3px">
           <input type="checkbox" id="cu_makuri_on">
           <label style="font-size:12px">捲り率が</label>
-          <input type="number" id="cu_makuri" value="45" min="0" max="100" step="1" style="width:52px">
+          <input type="number" id="cu_makuri" value="45" min="0" max="100" step="1" style="width:52px" oninput="renderReco()">
           <span style="font-size:12px;color:var(--sub)">%以上の選手が</span>
           <select id="cu_makuri_range" class="s">
             <option value="2-6">2〜6コースのどこかに</option>
@@ -239,7 +246,7 @@ footer{margin-top:28px;font-size:12px;color:var(--faint);border-top:1px solid va
           <option value="md">Markdown(表つき)</option>
         </select>
         <label style="font-size:12px">件数</label>
-        <select id="noteN" class="s" onchange="makeNote()">
+        <select id="noteN" class="s" onchange="this.dataset.touched='1';makeNote()">
           <option value="5">5件</option><option value="10" selected>10件</option>
           <option value="20">20件</option><option value="999">すべて</option>
         </select>
@@ -579,6 +586,12 @@ footer{margin-top:28px;font-size:12px;color:var(--faint);border-top:1px solid va
       </div>
       <p class="hint" style="margin:4px 0 0">1〜3着の確率をまとめて1つの集団にし、確率が高い(着順・艇)の組を降順に、合計が閾値に達するまで拾います。個別に閾値を決める方式より少ない点数で回収率が出やすい傾向があります。<br>
       検証(17,730レース・基準は個別方式60-70-80の回収率79.7%): 150%で回収率83.6%(平均1.7点) / 180%で82.1%(平均3.4点) / <b>220%で80.8%(平均10.1点・万舟98回)</b> / 250%で79.0%(平均22.3点・万舟427回)。</p>
+      <div class="row" style="margin-top:8px;gap:6px;flex-wrap:wrap;align-items:center">
+        <button onclick="applyPoolMidHouse()">中穴狙い(最有力の1点を除く)</button>
+        <span class="msg" id="poolMidNote2" style="font-size:11px;color:var(--faint)"></span>
+      </div>
+      <p class="hint" style="margin:4px 0 0">「着順×艇」の全18項目のうち、最も着率が高い1項目(＝最も本命筋の候補)だけを最初から候補から外した状態で、プール方式を組み直します。除いた分の確率は、自動的に次点以下の候補へ回ります(候補艇・点数が増えます)。<br>
+      <b>検証済み(出走表のみ、18,873レース): 平均36.6点・的中27.0%・回収率60.8%で、通常のプール220%(平均7.0点・的中35.4%・回収率79.3%)を大きく下回りました。</b>本命を外した分を補うために点数が5倍以上に膨らみ、的中率・回収率とも悪化しています。万舟の的中は61回→1,066回に増えましたが、点数増加に見合っていません。実戦での使用はおすすめしません。</p>
       <p class="hint" id="poolNote" style="margin:4px 0 0"></p>
     </div>
   </div>
@@ -1018,10 +1031,15 @@ function suggestBet(x,ev){
 }
 function noteList(){
   const mode=document.getElementById("recoMode").value;
-  let list=PROG.map(x=>({...x,ev:evalRace(x)}));
+  let list=PROG.map(x=>{
+    const ev=evalRace(x);
+    const pts=getFormationByMethod(ev.pos,currentFormMethod()).list.length;
+    return {...x,ev,pts};
+  });
   if(mode==="strong") list=list.filter(x=>x.ev.top1&&x.ev.a1);
   else if(mode==="kado") list=list.filter(x=>x.ev.kadoStrong);
   else if(mode==="aare") list=list.filter(x=>x.ev.weak1);
+  else if(mode==="gachi") list=list.filter(x=>x.pts<=3);
   else if(mode==="custom") list=list.filter(matchCustom);
   const sort=document.getElementById("recoSort").value;
   const tv=x=>x.dl?(+x.dl.split(":")[0])*60+(+x.dl.split(":")[1]):9999;
@@ -1066,6 +1084,36 @@ function poolFormation(pos,budget){
   Aa.forEach(a=>Bb.forEach(b=>Cc.forEach(c=>{ if(a!==b&&b!==c&&a!==c) list.push(`${a+1}-${b+1}-${c+1}`); })));
   return {A:Aa,B:Bb,C:Cc,list:[...new Set(list)]};
 }
+function getFormationByMethod(pos,methodId){
+  if(methodId==="poolExclTop") return poolFormationExcludeTop(pos,2.2);
+  if(methodId==="cum") return cumFormation(pos,0.60,0.70,0.80);
+  return poolFormation(pos,2.2);
+}
+function currentFormMethod(){
+  const el=document.getElementById("progFormMethod");
+  return el?el.value:"pool";
+}
+function poolFormationExcludeTop(pos,budget){
+  /* 全18項目(着順×艇)のうち最も確率が高い1つを候補から外した上で、
+     プール方式のアルゴリズム(確率が高い順に合計が閾値へ達するまで拾う)を最初から回し直す。
+     外した分は自動的に他の候補へ回る(次点の候補がその分多く選ばれる)。 */
+  const items=[];
+  for(let p=0;p<3;p++) for(let i=0;i<6;i++) items.push([pos[p][i],p,i]);
+  items.sort((a,b)=>b[0]-a[0]);
+  const top=items[0];
+  const rest=items.slice(1);
+  const A=new Set(),B=new Set(),C=new Set();
+  let s=0;
+  for(const [p,posIdx,i] of rest){
+    (posIdx===0?A:posIdx===1?B:C).add(i);
+    s+=p;
+    if(s>=budget) break;
+  }
+  const Aa=[...A],Bb=[...B],Cc=[...C];
+  const list=[];
+  Aa.forEach(a=>Bb.forEach(b=>Cc.forEach(c=>{ if(a!==b&&b!==c&&a!==c) list.push(`${a+1}-${b+1}-${c+1}`); })));
+  return {A:Aa,B:Bb,C:Cc,list:[...new Set(list)],excluded:{pos:top[1],boat:top[2],prob:top[0]}};
+}
 function betPlain(x,ev){
   const e=x.e, G={A1:4,A2:3,B1:2,B2:1}, ord=ev.ord;
   if(ev.est>=68){
@@ -1082,22 +1130,29 @@ function makeNote(){
   if(!PROG.length){setMsg("msg3","先に番組表を評価してください",false);return;}
   document.getElementById("noteBox").style.display="";
   const fmt=document.getElementById("noteFmt").value;
-  const n=+document.getElementById("noteN").value;
+  const mode0=document.getElementById("recoMode").value;
+  /* カスタム条件・ガチガチモードは、そもそも絞り込んだ結果を全部見たいのが自然なので、
+     件数欄が既定の10件のままなら自動的に「すべて」扱いにする(手動で件数を変えていればそちらを優先)。 */
+  const noteNEl=document.getElementById("noteN");
+  const n=(mode0==="custom"||mode0==="gachi")&&noteNEl.value==="10"&&!noteNEl.dataset.touched
+    ? 999 : +noteNEl.value;
   const list=noteList().slice(0,n);
   const modeLabel={strong:"1コースが堅いレース",kado:"カドが有力なレース",
-    aare:"荒れそうなレース",all:"全レース",custom:"独自条件で抽出"}[document.getElementById("recoMode").value];
+    aare:"荒れそうなレース",gachi:"ガチガチレース(点数3点以下)",all:"全レース",custom:"独自条件で抽出"}[document.getElementById("recoMode").value];
   const head=`${fmtJDate(window.__progDate)}の注目レース(${modeLabel})`;
   let t="";
   const chipTxt=i=>String(i+1);
   const joinNum=arr=>arr.map(chipTxt).join("");     /* 確率が高い順のまま連結(ソートしない) */
+  const formMethod=currentFormMethod();
+  const formMethodLabel={pool:"プール220%",poolExclTop:"プール220%・着率トップ除外",cum:"累積60-70-80"}[formMethod]||"プール220%";
   const cumTxt=x=>{
-    const f=poolFormation(x.ev.pos,2.2);
+    const f=getFormationByMethod(x.ev.pos,formMethod);
     return `${joinNum(f.A)}-${joinNum(f.B)}-${joinNum(f.C)}（${f.list.length}点）`;
   };
   const kimTxt=x=>(x.ev.kimTop||[]).map(r=>`${r.c}号艇${r.km}(${(r.p*100).toFixed(1)}%)`).join(" / ");
   if(fmt==="md"){
     t=`## ${head}\n\n`
-     +`| 締切 | 場 | R | ①号艇 | 推定1着率 | 展開予想 | フォーメーション(プール220%) |\n|---|---|---|---|---|---|---|\n`
+     +`| 締切 | 場 | R | ①号艇 | 推定1着率 | 展開予想 | フォーメーション(${formMethodLabel}) |\n|---|---|---|---|---|---|---|\n`
      +list.map(x=>`| ${x.dl||"—"} | ${VENMAP[x.v]||x.v} | ${x.r}R | ${x.e[0].name}(${x.e[0].grade} ${(x.e[0].nat||0).toFixed(2)}) | ${x.ev.est.toFixed(1)}% | ${kimTxt(x)} | ${cumTxt(x)} |`).join("\n")
      +`\n\n各艇の推定1着率\n\n`
      +list.map(x=>`- ${VENMAP[x.v]||x.v}${x.r}R … ${x.ev.P.map((p,i)=>`${i+1}号艇 ${p.toFixed(0)}%`).join(" / ")}`).join("\n");
@@ -1109,7 +1164,7 @@ function makeNote(){
          +`　①${e[0].name}(${e[0].grade}・勝率${(e[0].nat||0).toFixed(2)})\n`
          +`　推定1着率 ${x.ev.P.map((p,i)=>`${i+1}号艇${p.toFixed(0)}%`).join(" ")}\n`
          +`　展開予想 ${kimTxt(x)}\n`
-         +`　フォーメーション(プール220%) ${cumTxt(x)}`;
+         +`　フォーメーション(${formMethodLabel}) ${cumTxt(x)}`;
      }).join("\n\n");
   }
   t+=`\n\n---\n※推定1着率・フォーメーションは公開データ約4.7万レースで学習・較正したモデルによるものです(進入は枠なり想定)。`
@@ -1164,11 +1219,12 @@ function verifyResults(){
     document.getElementById("verifyOut").innerHTML=`<p class="hint">${KRESULT.length}件の結果を取り込みました。先に「番組表からおすすめ抽出」→「note用の記事を作る」で予想レースを書き出してから照合してください。</p>`;
     return;
   }
-  /* 判定基準はフォーメーション(プール220%)の的中で統一する */
+  /* 判定基準は、番組表タブで選んでいる買い方(既定:プール220%)の的中で統一する */
+  const vFormMethod=currentFormMethod();
   const rows=list.map(x=>{
     const kr=KRESULT.find(k=>k.v===x.v && k.r===x.r);
     if(!kr) return {x,kr:null};
-    const f=poolFormation(x.ev.pos,2.2);
+    const f=getFormationByMethod(x.ev.pos,vFormMethod);
     const hit=f.list.includes(kr.combo);
     const joinNum2=arr=>arr.map(i=>i+1).join("");   /* 確率が高い順のまま連結(ソートしない) */
     const desc=`${joinNum2(f.A)}-${joinNum2(f.B)}-${joinNum2(f.C)}(${f.list.length}点)`;
@@ -1181,7 +1237,7 @@ function verifyResults(){
   const invTotal=matched.reduce((a,r)=>a+r.cost,0);
   const retTotal=matched.reduce((a,r)=>a+r.ret,0);
   const roi=invTotal?(retTotal/invTotal*100):0;
-  let h='<table><thead><tr><th>場</th><th class="num">R</th><th>フォーメーション(プール220%)</th>'
+  let h='<table><thead><tr><th>場</th><th class="num">R</th><th>フォーメーション('+vFormMethodLabel+')</th>'
    +'<th class="num">結果(3連単)</th><th class="num">払戻</th><th>判定</th></tr></thead><tbody>';
   matched.forEach(({x,kr,hit,desc})=>{
     h+=`<tr><td style="font-size:12px">${VENMAP[x.v]||x.v}</td><td class="num">${x.r}R</td>
@@ -1205,7 +1261,7 @@ function makeVerifyNote(){
   const invTotal=rows.reduce((a,r)=>a+r.cost,0);
   const retTotal=rows.reduce((a,r)=>a+r.ret,0);
   const roi=invTotal?(retTotal/invTotal*100):0;
-  const head=`${fmtJDate(window.__kDate||window.__progDate)}の答え合わせ — フォーメーション(プール220%)は当たったか`;
+  const head=`${fmtJDate(window.__kDate||window.__progDate)}の答え合わせ — フォーメーション(${vFormMethodLabel})は当たったか`;
   let t=`【${head}】\n\n`
    +`照合レース数 ${rows.length}件 / 的中 ${hitN}件(${(hitN/rows.length*100).toFixed(1)}%) / `
    +`投資${invTotal.toLocaleString()}円 → 払戻${retTotal.toLocaleString()}円(回収率${roi.toFixed(1)}%)\n\n`;
@@ -1304,7 +1360,7 @@ function buildCustom(){
     for(let c=1;c<=6;c++){
       h+=`<span style="display:inline-flex;align-items:center;gap:1px">
         <span style="font-size:11px;color:var(--sub)">${c}</span>
-        <select id="cu_g${c}" class="s" style="font-size:11px;padding:2px 3px">
+        <select id="cu_g${c}" class="s" style="font-size:11px;padding:2px 3px" onchange="renderReco()">
           <option value="">—</option><option value="A1">A1</option><option value="A2">A2</option>
           <option value="B1">B1</option><option value="B2">B2</option>
           <option value="A1A2">A級</option><option value="B1B2">B級</option></select></span>`;
@@ -1317,8 +1373,8 @@ function buildCustom(){
     for(let c=1;c<=6;c++){
       h+=`<span style="display:inline-flex;align-items:center;gap:1px">
         <span style="font-size:11px;color:var(--sub)">${c}</span>
-        <input type="number" step="0.1" id="cu_rlo${c}" placeholder="下" style="width:44px;font-size:11px;padding:2px">
-        <input type="number" step="0.1" id="cu_rhi${c}" placeholder="上" style="width:44px;font-size:11px;padding:2px"></span>`;
+        <input type="number" step="0.1" id="cu_rlo${c}" placeholder="下" style="width:44px;font-size:11px;padding:2px" oninput="renderReco()">
+        <input type="number" step="0.1" id="cu_rhi${c}" placeholder="上" style="width:44px;font-size:11px;padding:2px" oninput="renderReco()"></span>`;
     }
     r.innerHTML=h; r.dataset.done="1";
   }
@@ -1425,7 +1481,7 @@ function renderReco(){
   document.getElementById("customBox").style.display=mode==="custom"?"":"none";
   let list=PROG.map(x=>{
     const ev=evalRace(x);const pat=classifyPattern(ev);
-    const pts=poolFormation(ev.pos,2.2).list.length;
+    const pts=getFormationByMethod(ev.pos,currentFormMethod()).list.length;
     return {...x,ev,pat,roi:PATTERN_ROI[pat],pts};
   });
   const vset=progVenueSet();
@@ -1434,6 +1490,7 @@ function renderReco(){
   if(mode==="strong") list=list.filter(x=>x.ev.top1&&x.ev.a1);
   else if(mode==="kado") list=list.filter(x=>x.ev.kadoStrong);
   else if(mode==="aare") list=list.filter(x=>x.ev.weak1);
+  else if(mode==="gachi") list=list.filter(x=>x.pts<=3);
   const sort=document.getElementById("recoSort").value;
   const tv=x=>x.dl?(+x.dl.split(":")[0])*60+(+x.dl.split(":")[1]):9999;
   if(sort==="time") list.sort((a,b)=>tv(a)-tv(b)||a.v-b.v);
@@ -2782,6 +2839,32 @@ function applyPool(){
      </div>
      <div style="margin-top:6px;font-size:12px">${f.list.length}点 × ${unit}円 = ${cost.toLocaleString()}円`
      +`　<span style="color:var(--sub)">モデル的中確率 ${(prob*100).toFixed(1)}%</span></div>`;
+  renderTri();
+}
+function applyPoolMidHouse(){
+  if(!curPos||!curTri.length){document.getElementById("poolMidNote2").textContent="先に出走表を取り込んでください";return;}
+  const budget=Math.max(1.0,Math.min(3.0,(gv("poolBudget")||220)/100));
+  const f=poolFormationExcludeTop(curPos,budget);
+  if(!f.list.length){document.getElementById("poolMidNote2").textContent="買い目を作れませんでした";return;}
+  const unit=gv("unit")||100;
+  for(const c in picked) delete picked[c];
+  anaStake={};
+  f.list.forEach(c=>{picked[c]=true; anaStake[c]=unit;});
+  const cost=unit*f.list.length;
+  let prob=0; f.list.forEach(c=>{const t=curTri.find(x=>x.c===c); if(t)prob+=t.pr;});
+  const posLabel=["1着","2着","3着"][f.excluded.pos];
+  const chip=i=>`<span class="chip" style="width:19px;height:19px;font-size:11px;background:${BC[i]};color:${BT[i]}">${i+1}</span>`;
+  document.getElementById("poolMidNote2").innerHTML=
+    `除いた候補: ${posLabel}の${chip(f.excluded.boat)}(着率${(f.excluded.prob*100).toFixed(1)}%、全${18}項目中で最も高い着率)<br>`
+    +`<div class="row" style="gap:3px;align-items:center;flex-wrap:wrap;margin-top:4px">
+       <span style="font-size:12px;color:var(--sub)">1着</span>${f.A.map(chip).join("")}
+       <span style="color:var(--faint);margin:0 2px">-</span>
+       <span style="font-size:12px;color:var(--sub)">2着</span>${f.B.map(chip).join("")}
+       <span style="color:var(--faint);margin:0 2px">-</span>
+       <span style="font-size:12px;color:var(--sub)">3着</span>${f.C.map(chip).join("")}
+     </div>
+     <div style="margin-top:4px;font-size:12px">${f.list.length}点 × ${unit}円 = ${cost.toLocaleString()}円`
+     +`　<span style="color:var(--sub)">合計的中確率 ${(prob*100).toFixed(1)}%</span></div>`;
   renderTri();
 }
 function applyCum(){
