@@ -1221,6 +1221,7 @@ function verifyResults(){
   }
   /* 判定基準は、番組表タブで選んでいる買い方(既定:プール220%)の的中で統一する */
   const vFormMethod=currentFormMethod();
+  const vFormMethodLabel={pool:"プール220%",poolExclTop:"プール220%・着率トップ除外",cum:"累積60-70-80"}[vFormMethod]||"プール220%";
   const rows=list.map(x=>{
     const kr=KRESULT.find(k=>k.v===x.v && k.r===x.r);
     if(!kr) return {x,kr:null};
@@ -1248,7 +1249,7 @@ function verifyResults(){
   });
   h+="</tbody></table>";
   document.getElementById("verifyOut").innerHTML=h
-    +`<p class="hint" style="margin-top:8px">プール220%のフォーメーションで書き出した ${matched.length}/${list.length} 件のうち、的中は ${hitN} 件(${matched.length?(hitN/matched.length*100).toFixed(1):"0"}%)。`
+    +`<p class="hint" style="margin-top:8px">${vFormMethodLabel}のフォーメーションで書き出した ${matched.length}/${list.length} 件のうち、的中は ${hitN} 件(${matched.length?(hitN/matched.length*100).toFixed(1):"0"}%)。`
     +`投資${invTotal.toLocaleString()}円 → 払戻${retTotal.toLocaleString()}円(回収率${roi.toFixed(1)}%)。</p>`;
   window.__verifyRows=matched;
   setMsg2("verifyMsg",`${matched.length}件を照合しました`,true);
