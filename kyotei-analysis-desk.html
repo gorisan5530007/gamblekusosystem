@@ -150,7 +150,7 @@ footer{margin-top:28px;font-size:12px;color:var(--faint);border-top:1px solid va
         <option value="strong">1コースが堅い(勝率最高＋A1)</option>
         <option value="kado">カド(4コース)が有力</option>
         <option value="aare">荒れそう(1号艇が弱い)</option>
-        <option value="gachi">ガチガチレース(点数3点以下)</option>
+        <option value="gachi">ガチガチレース(点数2点以下・最有力1点買い)</option>
         <option value="all">全レース</option>
         <option value="custom">カスタム条件</option>
       </select>
@@ -590,8 +590,9 @@ footer{margin-top:28px;font-size:12px;color:var(--faint);border-top:1px solid va
         <button onclick="applyPoolMidHouse()">中穴狙い(最有力の1点を除く)</button>
         <span class="msg" id="poolMidNote2" style="font-size:11px;color:var(--faint)"></span>
       </div>
-      <p class="hint" style="margin:4px 0 0">「着順×艇」の全18項目のうち、最も着率が高い1項目(＝最も本命筋の候補)だけを最初から候補から外した状態で、プール方式を組み直します。除いた分の確率は、自動的に次点以下の候補へ回ります(候補艇・点数が増えます)。<br>
-      <b>検証済み(出走表のみ、18,873レース): 平均36.6点・的中27.0%・回収率60.8%で、通常のプール220%(平均7.0点・的中35.4%・回収率79.3%)を大きく下回りました。</b>本命を外した分を補うために点数が5倍以上に膨らみ、的中率・回収率とも悪化しています。万舟の的中は61回→1,066回に増えましたが、点数増加に見合っていません。実戦での使用はおすすめしません。</p>
+      <p class="hint" style="margin:4px 0 0">プール方式で組んだ買い目から、モデルの的中確率が最も高い1組番(＝最も人気で最も配当が低い目)だけを間引きます。候補を作り直すわけではないので、点数はほぼ変わりません。<br>
+      <b>検証済み(出走表のみ、18,873レース): 平均6.0点(通常より1点少ない)・的中26.4%・回収率79.6%で、通常のプール220%(平均7.0点・的中35.4%・回収率79.3%)とほぼ同等でした。</b>信頼区間は重なっており明確な優位とまでは言えませんが、点数(コスト)を1点減らした上で回収率が下がっていないため、実質的にはわずかに有利と考えられます。<br>
+      (参考)「着順×艇」の最有力項目を除いて候補ごと作り直す方式や、合計しきい値を250〜280%に広げる方式も試しましたが、どちらも通常方式を下回りました。</p>
       <p class="hint" id="poolNote" style="margin:4px 0 0"></p>
     </div>
   </div>
@@ -1002,7 +1003,7 @@ function evalRace(x){
   }
   kimRows.sort((a,b)=>b.p-a.p);
   const kimTop=kimRows.slice(0,3);
-  return {top1,a1,kadoStrong,weak1,nA,mx:mxNat,gap1,est:P[0],P,ord,pos:[pp1,pp2,pp3],kimTop};
+  return {top1,a1,kadoStrong,weak1,nA,mx:mxNat,gap1,est:P[0],P,ord,pos:[pp1,pp2,pp3],kimTop,strength};
 }
 function suggestBet(x,ev){
   /* あくまで出発点となる候補。番組表の情報だけで組んだ場合の回収率は約77%で、
@@ -1039,7 +1040,7 @@ function noteList(){
   if(mode==="strong") list=list.filter(x=>x.ev.top1&&x.ev.a1);
   else if(mode==="kado") list=list.filter(x=>x.ev.kadoStrong);
   else if(mode==="aare") list=list.filter(x=>x.ev.weak1);
-  else if(mode==="gachi") list=list.filter(x=>x.pts<=3);
+  else if(mode==="gachi") list=list.filter(x=>x.pts<=2);
   else if(mode==="custom") list=list.filter(matchCustom);
   const sort=document.getElementById("recoSort").value;
   const tv=x=>x.dl?(+x.dl.split(":")[0])*60+(+x.dl.split(":")[1]):9999;
@@ -1138,15 +1139,39 @@ function makeNote(){
     ? 999 : +noteNEl.value;
   const list=noteList().slice(0,n);
   const modeLabel={strong:"1コースが堅いレース",kado:"カドが有力なレース",
-    aare:"荒れそうなレース",gachi:"ガチガチレース(点数3点以下)",all:"全レース",custom:"独自条件で抽出"}[document.getElementById("recoMode").value];
+    aare:"荒れそうなレース",gachi:"ガチガチレース(点数2点以下・最有力1点買い)",all:"全レース",custom:"独自条件で抽出"}[document.getElementById("recoMode").value];
   const head=`${fmtJDate(window.__progDate)}の注目レース(${modeLabel})`;
   let t="";
   const chipTxt=i=>String(i+1);
   const joinNum=arr=>arr.map(chipTxt).join("");     /* 確率が高い順のまま連結(ソートしない) */
   const formMethod=currentFormMethod();
   const formMethodLabel={pool:"プール220%",poolExclTop:"プール220%・着率トップ除外",cum:"累積60-70-80"}[formMethod]||"プール220%";
+  const mode0b=document.getElementById("recoMode").value;
+  /* 組番(例"1-2-3")の同時的中確率を、艇ごとの強さ(strength配列)からPlackett-Luce順次除去で正しく計算する。
+     evalRace内のpp1/pp2/pp3集計と同じ式(p1*p2*p3を、着順が決まるたびに残り艇で正規化しながら掛ける)。 */
+  const tripleProb=(strength,c)=>{
+    const [i,j,m]=c.split("-").map(n=>+n-1);
+    const tot=strength.reduce((a,b)=>a+b,0);
+    const s1=strength[i]/tot;
+    const remJ=strength.reduce((a,v,idx)=>idx===i?a:a+v,0);
+    const s2=strength[j]/remJ;
+    const remM=strength.reduce((a,v,idx)=>(idx===i||idx===j)?a:a+v,0);
+    const s3=strength[m]/remM;
+    return s1*s2*s3;
+  };
   const cumTxt=x=>{
     const f=getFormationByMethod(x.ev.pos,formMethod);
+    if(mode0b==="gachi"){
+      /* ガチガチモードは「買い方」の選択に関わらず、抽出時と同じプール220%の候補から
+         最も的中確率が高い1点だけを買い目として表示する(実際に賭けるのは1点のみのため)。 */
+      const f2=poolFormation(x.ev.pos,2.2);
+      let top=null,topPr=-1;
+      f2.list.forEach(c=>{
+        const pr=x.ev.strength?tripleProb(x.ev.strength,c):0;
+        if(pr>topPr){topPr=pr; top=c;}
+      });
+      return `${top}（1点）`;
+    }
     return `${joinNum(f.A)}-${joinNum(f.B)}-${joinNum(f.C)}（${f.list.length}点）`;
   };
   const kimTxt=x=>(x.ev.kimTop||[]).map(r=>`${r.c}号艇${r.km}(${(r.p*100).toFixed(1)}%)`).join(" / ");
@@ -1492,7 +1517,7 @@ function renderReco(){
   if(mode==="strong") list=list.filter(x=>x.ev.top1&&x.ev.a1);
   else if(mode==="kado") list=list.filter(x=>x.ev.kadoStrong);
   else if(mode==="aare") list=list.filter(x=>x.ev.weak1);
-  else if(mode==="gachi") list=list.filter(x=>x.pts<=3);
+  else if(mode==="gachi") list=list.filter(x=>x.pts<=2);
   const sort=document.getElementById("recoSort").value;
   const tv=x=>x.dl?(+x.dl.split(":")[0])*60+(+x.dl.split(":")[1]):9999;
   if(sort==="time") list.sort((a,b)=>tv(a)-tv(b)||a.v-b.v);
@@ -2846,27 +2871,26 @@ function applyPool(){
 function applyPoolMidHouse(){
   if(!curPos||!curTri.length){document.getElementById("poolMidNote2").textContent="先に出走表を取り込んでください";return;}
   const budget=Math.max(1.0,Math.min(3.0,(gv("poolBudget")||220)/100));
-  const f=poolFormationExcludeTop(curPos,budget);
-  if(!f.list.length){document.getElementById("poolMidNote2").textContent="買い目を作れませんでした";return;}
+  const f=poolFormation(curPos,budget);
+  if(f.list.length<2){document.getElementById("poolMidNote2").textContent="この設定では1点しか買い目がなく、中穴狙いにできません(合計しきい値を上げてください)";return;}
+  /* プール方式で組んだ買い目から、モデルの的中確率が最も高い1組番(＝最も人気で最も配当が低い目)だけを除く。
+     除外して候補を作り直すのではなく、既存の買い目から1点だけ間引くだけなので点数はほぼ変わらない。 */
+  let topC=null, topPr=-1;
+  f.list.forEach(c=>{
+    const t=curTri.find(x=>x.c===c);
+    const pr=t?t.pr:0;
+    if(pr>topPr){topPr=pr; topC=c;}
+  });
+  const filtered=f.list.filter(c=>c!==topC);
   const unit=gv("unit")||100;
   for(const c in picked) delete picked[c];
   anaStake={};
-  f.list.forEach(c=>{picked[c]=true; anaStake[c]=unit;});
-  const cost=unit*f.list.length;
-  let prob=0; f.list.forEach(c=>{const t=curTri.find(x=>x.c===c); if(t)prob+=t.pr;});
-  const posLabel=["1着","2着","3着"][f.excluded.pos];
-  const chip=i=>`<span class="chip" style="width:19px;height:19px;font-size:11px;background:${BC[i]};color:${BT[i]}">${i+1}</span>`;
+  filtered.forEach(c=>{picked[c]=true; anaStake[c]=unit;});
+  const cost=unit*filtered.length;
+  let prob=0; filtered.forEach(c=>{const t=curTri.find(x=>x.c===c); if(t)prob+=t.pr;});
   document.getElementById("poolMidNote2").innerHTML=
-    `除いた候補: ${posLabel}の${chip(f.excluded.boat)}(着率${(f.excluded.prob*100).toFixed(1)}%、全${18}項目中で最も高い着率)<br>`
-    +`<div class="row" style="gap:3px;align-items:center;flex-wrap:wrap;margin-top:4px">
-       <span style="font-size:12px;color:var(--sub)">1着</span>${f.A.map(chip).join("")}
-       <span style="color:var(--faint);margin:0 2px">-</span>
-       <span style="font-size:12px;color:var(--sub)">2着</span>${f.B.map(chip).join("")}
-       <span style="color:var(--faint);margin:0 2px">-</span>
-       <span style="font-size:12px;color:var(--sub)">3着</span>${f.C.map(chip).join("")}
-     </div>
-     <div style="margin-top:4px;font-size:12px">${f.list.length}点 × ${unit}円 = ${cost.toLocaleString()}円`
-     +`　<span style="color:var(--sub)">合計的中確率 ${(prob*100).toFixed(1)}%</span></div>`;
+    `除いた組番: ${topC}(モデル的中確率${(topPr*100).toFixed(1)}%、買い目の中で最も人気の目) → 残り${filtered.length}点 × ${unit}円 = ${cost.toLocaleString()}円`
+    +`　<span style="color:var(--sub)">合計的中確率 ${(prob*100).toFixed(1)}%</span>`;
   renderTri();
 }
 function applyCum(){
