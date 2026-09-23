@@ -2742,6 +2742,20 @@ function runComboJudge(){
     form: formHit? plain(formHit):"", lead: leadHit? plain(leadHit):"",
     crs:[1,2,3,4,5,6].map(i=>+document.getElementById("crs"+i).value)
   };
+  window.__combo.form45=null;
+  if(formHit){
+    /* ④→⑤の形の買い目: 4コースの艇を1着、5コースの艇を2・3着に固定し、
+       1マーク先取り予想の下位3コースの艇を除いた残りを相手にする(ツールの「検証済みの形」ボタンと同じ組み方) */
+    const byC={}; window.__combo.crs.forEach((cc,i)=>byC[cc]=i+1);
+    const h4=byC[4], p5=byC[5], ord=window.__turnOrder;
+    if(h4&&p5&&ord){
+      const ex=new Set([h4,p5]);
+      ord.slice(-3).forEach(cc=>{ if(byC[cc]) ex.add(byC[cc]); });
+      const oth=[1,2,3,4,5,6].filter(x=>!ex.has(x));
+      const list=[]; oth.forEach(y=>{ list.push(`${h4}-${p5}-${y}`); list.push(`${h4}-${y}-${p5}`); });
+      window.__combo.form45={head:h4, partner:p5, cut:[...ex].filter(x=>x!==h4&&x!==p5), list};
+    }
+  }
   document.getElementById("comboNoteBox").style.display="";
   document.getElementById("cnVenue").value=document.getElementById("venue").value||"";
   document.getElementById("cnRno").value=document.getElementById("rno").value||"";
@@ -2786,7 +2800,7 @@ function makeComboNote(){
   let t="";
   t+=`【${venue} ${rno}R 有料予想】${ds}${tm?" 締切"+tm:""}\n\n`;
   t+=`■ レース概要\n`;
-  t+=`進入: ${entry}\n`;
+  t+=`進入(1コースから順に艇番): ${entry}\n`;
   t+=`モデルの推定1着率(出走表ベース)\n`;
   ord.forEach(i=>{ t+=`　${i+1}号艇 ${nm(i)} ${(c.p1[i]*100).toFixed(1)}%\n`; });
   t+=`\n■ 使った判定材料\n`;
@@ -2794,7 +2808,7 @@ function makeComboNote(){
   t+=c.chokuOk?`・直前情報(展示タイム・進入からスリット隊形を推定)\n`:`・直前情報: なし\n`;
   t+=c.ohOk?`・オッズ履歴(締切20分前→${c.finalUsed?"公式の直前オッズ":"最新"}の票の動き)\n`:`・オッズ履歴: なし\n`;
   const pats=[];
-  if(c.form) pats.push("④→⑤の形");
+  if(c.form) pats.push(c.form45?`④→⑤の形(4コース=${c.form45.head}号艇、5コース=${c.form45.partner}号艇)`:"④→⑤の形");
   if(c.lead) pats.push("先行艇×捲り率");
   t+=`\n■ 該当した検証済みパターン\n${pats.length?pats.map(x=>"・"+x).join("\n"):"・なし"}\n`;
   if(!c.combos.length){
@@ -2812,13 +2826,22 @@ function makeComboNote(){
   }else{
     t+=`■ 買い目\n見送り\n`;
   }
+  if(c.form45&&c.form45.list.length){
+    const f=c.form45;
+    t+=`\n■ 参考: ④→⑤の形の買い目(3連単・${f.list.length}点)\n`;
+    t+=`4コースの${f.head}号艇を1着、5コースの${f.partner}号艇を2・3着に固定し、1マーク先取り予想で下位の${f.cut.join("・")}号艇を外した形です。\n`;
+    f.list.forEach(x=>{ t+=`${x}　${unit}円\n`; });
+    t+=`合計 ${(f.list.length*unit).toLocaleString()}円\n`;
+  }
   t+=`\n■ 根拠\n`;
   if(c.ohOk) t+=`・票の動き: 直前に票が伸びた${c.best}号艇を2・3着候補に追加し、票が離れた${c.worst}号艇を候補から外しています。\n`;
   const fm=(c.form||"").match(/内勢より(-?\d+\.\d)m/);
   if(c.form){
     const v=fm?parseFloat(fm[1]):null;
     const pos=(v===null)?"内側の3艇と並ぶか前に出る":(v<0.05?"内側の3艇と並ぶ":`内側の3艇より${v.toFixed(1)}m前に出る`);
-    t+=`・④→⑤の形: 展示タイムとSTから、④コースが1マークで${pos}隊形と推定しています。\n`;
+    const f45=c.form45;
+    const who=f45?`4コースの${f45.head}号艇`:"4コースの艇";
+    t+=`・④→⑤の形: 展示タイムとSTから、${who}が1マークで${pos}隊形と推定しています。\n`;
   }
   const lm=(c.lead||"").match(/(\d)コース\((\d)号艇\)が1マークで他艇より(\d+\.\d)m前.*?捲り率が(\d+\.\d)%/);
   if(c.lead&&lm) t+=`・先行艇×捲り率: ${lm[2]}号艇(${lm[1]}コース)が1マークで他の全艇より${lm[3]}m前に出る隊形と推定され、このコースでの捲り率も${lm[4]}%あります。\n`;
