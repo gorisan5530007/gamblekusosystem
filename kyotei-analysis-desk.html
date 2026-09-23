@@ -1192,6 +1192,20 @@ function betPlain(x,ev){
   const p=ord.filter(i=>i!==0).slice(0,3).map(i=>i+1).sort((a,b)=>a-b);
   return `1-${p.join("")}=${p.join("")}`;
 }
+/* ガチガチモードの1点: プール220%の候補の中から、同時的中確率が最も高い組番を選ぶ(記事・結果検証で共通) */
+function tripleProbOf(strength,c){
+  const [i,j,m]=c.split("-").map(n=>+n-1);
+  const tot=strength.reduce((a,b)=>a+b,0);
+  const remJ=strength.reduce((a,v,idx)=>idx===i?a:a+v,0);
+  const remM=strength.reduce((a,v,idx)=>(idx===i||idx===j)?a:a+v,0);
+  return (strength[i]/tot)*(strength[j]/remJ)*(strength[m]/remM);
+}
+function gachiTopCombo(ev){
+  const f=poolFormation(ev.pos,2.2);
+  let top=null,topPr=-1;
+  f.list.forEach(c=>{ const pr=ev.strength?tripleProbOf(ev.strength,c):0; if(pr>topPr){topPr=pr; top=c;} });
+  return top;
+}
 function makeNote(){
   if(!PROG.length){setMsg("msg3","先に番組表を評価してください",false);return;}
   document.getElementById("noteBox").style.display="";
@@ -1212,30 +1226,11 @@ function makeNote(){
   const formMethod=currentFormMethod();
   const formMethodLabel={pool:"プール220%",poolExclTop:"プール220%・着率トップ除外",cum:"累積60-70-80"}[formMethod]||"プール220%";
   const mode0b=document.getElementById("recoMode").value;
-  /* 組番(例"1-2-3")の同時的中確率を、艇ごとの強さ(strength配列)からPlackett-Luce順次除去で正しく計算する。
-     evalRace内のpp1/pp2/pp3集計と同じ式(p1*p2*p3を、着順が決まるたびに残り艇で正規化しながら掛ける)。 */
-  const tripleProb=(strength,c)=>{
-    const [i,j,m]=c.split("-").map(n=>+n-1);
-    const tot=strength.reduce((a,b)=>a+b,0);
-    const s1=strength[i]/tot;
-    const remJ=strength.reduce((a,v,idx)=>idx===i?a:a+v,0);
-    const s2=strength[j]/remJ;
-    const remM=strength.reduce((a,v,idx)=>(idx===i||idx===j)?a:a+v,0);
-    const s3=strength[m]/remM;
-    return s1*s2*s3;
-  };
   const cumTxt=x=>{
     const f=getFormationByMethod(x.ev.pos,formMethod);
     if(mode0b==="gachi"){
-      /* ガチガチモードは「買い方」の選択に関わらず、抽出時と同じプール220%の候補から
-         最も的中確率が高い1点だけを買い目として表示する(実際に賭けるのは1点のみのため)。 */
-      const f2=poolFormation(x.ev.pos,2.2);
-      let top=null,topPr=-1;
-      f2.list.forEach(c=>{
-        const pr=x.ev.strength?tripleProb(x.ev.strength,c):0;
-        if(pr>topPr){topPr=pr; top=c;}
-      });
-      return `${top}（1点）`;
+      /* ガチガチモードは、抽出時と同じプール220%の候補から最も的中確率が高い1点だけを買い目にする */
+      return `${gachiTopCombo(x.ev)}（1点）`;
     }
     return `${joinNum(f.A)}-${joinNum(f.B)}-${joinNum(f.C)}（${f.list.length}点）`;
   };
@@ -1265,6 +1260,7 @@ function makeNote(){
   document.getElementById("noteOut").value=t;
   setMsg("msg3",`${list.length}件を書き出しました`,true);
   window.__lastNoteList=list;   /* 結果検証記事で使う */
+  window.__lastNoteMode=mode0b;  /* 検証は、記事を作ったときの買い方で行う */
   window.__lastNoteMode=document.getElementById("recoMode").value;
 }
 let KRESULT=[];   /* [{v(場コード), r(R), combo, amount}] */
@@ -1312,9 +1308,16 @@ function verifyResults(){
   /* 判定基準は、番組表タブで選んでいる買い方(既定:プール220%)の的中で統一する */
   const vFormMethod=currentFormMethod();
   const vFormMethodLabel={pool:"プール220%",poolExclTop:"プール220%・着率トップ除外",cum:"累積60-70-80"}[vFormMethod]||"プール220%";
+  const isGachi=window.__lastNoteMode==="gachi";
   const rows=list.map(x=>{
     const kr=KRESULT.find(k=>k.v===x.v && k.r===x.r);
     if(!kr) return {x,kr:null};
+    if(isGachi){
+      /* ガチガチの記事は最有力1点しか載せていないので、その1点(100円)で判定する */
+      const top=gachiTopCombo(x.ev);
+      const hit=top===kr.combo;
+      return {x,kr,hit,desc:`${top}(1点)`,pts:1,cost:100,ret:hit?kr.amount:0};
+    }
     const f=getFormationByMethod(x.ev.pos,vFormMethod);
     const hit=f.list.includes(kr.combo);
     const joinNum2=arr=>arr.map(i=>i+1).join("");   /* 確率が高い順のまま連結(ソートしない) */
@@ -1328,7 +1331,7 @@ function verifyResults(){
   const invTotal=matched.reduce((a,r)=>a+r.cost,0);
   const retTotal=matched.reduce((a,r)=>a+r.ret,0);
   const roi=invTotal?(retTotal/invTotal*100):0;
-  let h='<table><thead><tr><th>場</th><th class="num">R</th><th>フォーメーション</th>'
+  let h='<table><thead><tr><th>場</th><th class="num">R</th><th>'+(isGachi?'買い目(1点)':'フォーメーション')+'</th>'
    +'<th class="num">結果(3連単)</th><th class="num">払戻</th><th>判定</th></tr></thead><tbody>';
   matched.forEach(({x,kr,hit,desc})=>{
     h+=`<tr><td style="font-size:12px">${VENMAP[x.v]||x.v}</td><td class="num">${x.r}R</td>
@@ -1339,9 +1342,10 @@ function verifyResults(){
   });
   h+="</tbody></table>";
   document.getElementById("verifyOut").innerHTML=h
-    +`<p class="hint" style="margin-top:8px">フォーメーションで書き出した ${matched.length}/${list.length} 件のうち、的中は ${hitN} 件(${matched.length?(hitN/matched.length*100).toFixed(1):"0"}%)。`
+    +`<p class="hint" style="margin-top:8px">${isGachi?"ガチガチ(最有力1点)":"フォーメーション"}で書き出した ${matched.length}/${list.length} 件のうち、的中は ${hitN} 件(${matched.length?(hitN/matched.length*100).toFixed(1):"0"}%)。`
     +`投資${invTotal.toLocaleString()}円 → 払戻${retTotal.toLocaleString()}円(回収率${roi.toFixed(1)}%)。</p>`;
   window.__verifyRows=matched;
+  window.__verifyGachi=isGachi;
   setMsg2("verifyMsg",`${matched.length}件を照合しました`,true);
 }
 function setMsg2(id,txt,ok){const e=document.getElementById(id);e.textContent=txt;e.style.color=ok?"var(--pos)":"var(--neg)";}
@@ -1353,7 +1357,8 @@ function makeVerifyNote(){
   const retTotal=rows.reduce((a,r)=>a+r.ret,0);
   const roi=invTotal?(retTotal/invTotal*100):0;
   const vFormMethodLabel={pool:"プール220%",poolExclTop:"プール220%・着率トップ除外",cum:"累積60-70-80"}[currentFormMethod()]||"プール220%";
-  const head=`${fmtJDate(window.__kDate||window.__progDate)}の答え合わせ — フォーメーションは当たったか`;
+  const g=!!window.__verifyGachi;
+  const head=`${fmtJDate(window.__kDate||window.__progDate)}の答え合わせ — ${g?"ガチガチレースの1点予想":"フォーメーション"}は当たったか`;
   let t=`【${head}】\n\n`
    +`照合レース数 ${rows.length}件 / 的中 ${hitN}件(${(hitN/rows.length*100).toFixed(1)}%) / `
    +`投資${invTotal.toLocaleString()}円 → 払戻${retTotal.toLocaleString()}円(回収率${roi.toFixed(1)}%)\n\n`;
@@ -1362,7 +1367,7 @@ function makeVerifyNote(){
      +`　買い目: ${desc}\n`
      +`　結果: ${kr.combo}(払戻${kr.amount.toLocaleString()}円) → ${hit?"的中":"不的中"}\n\n`;
   });
-  t+=`---\n※フォーメーションは公開データ約4.7万レースで学習・較正したモデルによるものです(進入は枠なり想定)。\n`
+  t+=`---\n※${g?"買い目(各レース最有力の1点・100円)":"フォーメーション"}は公開データ約4.7万レースで学習・較正したモデルによるものです(進入は枠なり想定)。\n`
    +`※この記事は事前の推定と結果を突き合わせた記録で、特定の賭け方を推奨するものではありません。`;
   const box=document.getElementById("verifyNoteOut");
   box.style.display=""; box.value=t;
