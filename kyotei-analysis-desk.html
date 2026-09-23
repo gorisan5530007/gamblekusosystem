@@ -438,6 +438,7 @@ footer{margin-top:28px;font-size:12px;color:var(--faint);border-top:1px solid va
   <p class="msg err" id="warn"></p>
   <p class="hint" id="matched" style="font-family:var(--mono)"></p>
   <div id="formAlert" style="display:none;margin:10px 0;padding:10px 12px;background:var(--pos);color:#06240f;border-radius:8px;font-size:13px"></div>
+  <div id="leadAlert" style="display:none;margin:10px 0;padding:10px 12px;background:var(--pos);color:#06240f;border-radius:8px;font-size:13px"></div>
   <div class="row" style="gap:8px;align-items:center;margin-bottom:8px">
     <label style="font-size:12px;display:flex;align-items:center;gap:4px">
       <input type="checkbox" id="notifyToggle"> 該当時に音・通知で知らせる
@@ -1177,7 +1178,7 @@ function makeNote(){
   const kimTxt=x=>(x.ev.kimTop||[]).map(r=>`${r.c}号艇${r.km}(${(r.p*100).toFixed(1)}%)`).join(" / ");
   if(fmt==="md"){
     t=`## ${head}\n\n`
-     +`| 締切 | 場 | R | ①号艇 | 推定1着率 | 展開予想 | フォーメーション(${formMethodLabel}) |\n|---|---|---|---|---|---|---|\n`
+     +`| 締切 | 場 | R | ①号艇 | 推定1着率 | 展開予想 | フォーメーション |\n|---|---|---|---|---|---|---|\n`
      +list.map(x=>`| ${x.dl||"—"} | ${VENMAP[x.v]||x.v} | ${x.r}R | ${x.e[0].name}(${x.e[0].grade} ${(x.e[0].nat||0).toFixed(2)}) | ${x.ev.est.toFixed(1)}% | ${kimTxt(x)} | ${cumTxt(x)} |`).join("\n")
      +`\n\n各艇の推定1着率\n\n`
      +list.map(x=>`- ${VENMAP[x.v]||x.v}${x.r}R … ${x.ev.P.map((p,i)=>`${i+1}号艇 ${p.toFixed(0)}%`).join(" / ")}`).join("\n");
@@ -1189,7 +1190,7 @@ function makeNote(){
          +`　①${e[0].name}(${e[0].grade}・勝率${(e[0].nat||0).toFixed(2)})\n`
          +`　推定1着率 ${x.ev.P.map((p,i)=>`${i+1}号艇${p.toFixed(0)}%`).join(" ")}\n`
          +`　展開予想 ${kimTxt(x)}\n`
-         +`　フォーメーション(${formMethodLabel}) ${cumTxt(x)}`;
+         +`　フォーメーション ${cumTxt(x)}`;
      }).join("\n\n");
   }
   t+=`\n\n---\n※推定1着率・フォーメーションは公開データ約4.7万レースで学習・較正したモデルによるものです(進入は枠なり想定)。`
@@ -1263,7 +1264,7 @@ function verifyResults(){
   const invTotal=matched.reduce((a,r)=>a+r.cost,0);
   const retTotal=matched.reduce((a,r)=>a+r.ret,0);
   const roi=invTotal?(retTotal/invTotal*100):0;
-  let h='<table><thead><tr><th>場</th><th class="num">R</th><th>フォーメーション('+vFormMethodLabel+')</th>'
+  let h='<table><thead><tr><th>場</th><th class="num">R</th><th>フォーメーション</th>'
    +'<th class="num">結果(3連単)</th><th class="num">払戻</th><th>判定</th></tr></thead><tbody>';
   matched.forEach(({x,kr,hit,desc})=>{
     h+=`<tr><td style="font-size:12px">${VENMAP[x.v]||x.v}</td><td class="num">${x.r}R</td>
@@ -1274,7 +1275,7 @@ function verifyResults(){
   });
   h+="</tbody></table>";
   document.getElementById("verifyOut").innerHTML=h
-    +`<p class="hint" style="margin-top:8px">${vFormMethodLabel}のフォーメーションで書き出した ${matched.length}/${list.length} 件のうち、的中は ${hitN} 件(${matched.length?(hitN/matched.length*100).toFixed(1):"0"}%)。`
+    +`<p class="hint" style="margin-top:8px">フォーメーションで書き出した ${matched.length}/${list.length} 件のうち、的中は ${hitN} 件(${matched.length?(hitN/matched.length*100).toFixed(1):"0"}%)。`
     +`投資${invTotal.toLocaleString()}円 → 払戻${retTotal.toLocaleString()}円(回収率${roi.toFixed(1)}%)。</p>`;
   window.__verifyRows=matched;
   setMsg2("verifyMsg",`${matched.length}件を照合しました`,true);
@@ -1288,7 +1289,7 @@ function makeVerifyNote(){
   const retTotal=rows.reduce((a,r)=>a+r.ret,0);
   const roi=invTotal?(retTotal/invTotal*100):0;
   const vFormMethodLabel={pool:"プール220%",poolExclTop:"プール220%・着率トップ除外",cum:"累積60-70-80"}[currentFormMethod()]||"プール220%";
-  const head=`${fmtJDate(window.__kDate||window.__progDate)}の答え合わせ — フォーメーション(${vFormMethodLabel})は当たったか`;
+  const head=`${fmtJDate(window.__kDate||window.__progDate)}の答え合わせ — フォーメーションは当たったか`;
   let t=`【${head}】\n\n`
    +`照合レース数 ${rows.length}件 / 的中 ${hitN}件(${(hitN/rows.length*100).toFixed(1)}%) / `
    +`投資${invTotal.toLocaleString()}円 → 払戻${retTotal.toLocaleString()}円(回収率${roi.toFixed(1)}%)\n\n`;
@@ -2533,6 +2534,55 @@ function checkFormAlert(crs,behind){
     window.__lastAlertKey=null;
   }
 }
+function checkLeadAlert(crs,behind){
+  /* 「先行艇×捲り率」の形: 1コース以外のいずれかの艇が、1マークで他の5艇全員より2m以上前に出ており、
+     かつその艇の登録選手が該当コースでの捲り率10%以上(走数10以上)の場合に通知する。
+     蓄積データでの検証: 該当時の単勝回収率は約108〜115%(探索114.6%・検証108.3%、385レース)。 */
+  const el=document.getElementById("leadAlert");
+  if(!el)return;
+  if(typeof KIMFULL2==="undefined"){ el.style.display="none"; return; }
+  let best=null;
+  for(let c=2;c<=6;c++){
+    const lane=crs.indexOf(c)+1;
+    if(!lane) continue;
+    const others=[1,2,3,4,5,6].filter(x=>x!==lane);
+    if(others.length<5) continue;
+    const bC=behind[lane-1];
+    const worstOther=Math.max(...others.map(l=>behind[l-1]));
+    const lead=worstOther-bC;
+    if(lead<2) continue;
+    const tb=(document.getElementById("reg"+lane)||{}).value?.trim();
+    if(!tb) continue;
+    const rec=(KIMFULL2[tb]||{})[c];
+    if(!rec || rec[0]<10) continue;
+    const makuri=rec[2];
+    if(makuri<0.10) continue;
+    if(!best || lead>best.lead) best={lane,c,lead,makuri,tb};
+  }
+  if(best){
+    el.style.display="";
+    el.innerHTML=`<b>🔔 検証済みの形に該当</b> — ${best.c}コース(${best.lane}号艇)が1マークで他艇より${best.lead.toFixed(1)}m前に出ており、`
+      +`このコースでの捲り率が${(best.makuri*100).toFixed(1)}%(10%以上)あります。`
+      +`単勝で狙える状況です(蓄積データでの検証: 回収率108〜115%・385レース)。`;
+    if(document.getElementById("notifyToggle")&&document.getElementById("notifyToggle").checked
+       && window.__lastLeadAlertKey!==JSON.stringify(crs)){
+      window.__lastLeadAlertKey=JSON.stringify(crs);
+      if("Notification" in window && Notification.permission==="granted"){
+        new Notification("先行艇×捲り率の形に該当",{body:`${best.c}コース(${best.lane}号艇)が${best.lead.toFixed(1)}m前・捲り率${(best.makuri*100).toFixed(1)}%。単勝回収率実績108〜115%の形です。`});
+      }
+      try{
+        const ctx=new (window.AudioContext||window.webkitAudioContext)();
+        const o=ctx.createOscillator(), g=ctx.createGain();
+        o.frequency.value=660; o.connect(g); g.connect(ctx.destination);
+        g.gain.setValueAtTime(0.15,ctx.currentTime);
+        o.start(); o.stop(ctx.currentTime+0.18);
+      }catch(e){}
+    }
+  }else{
+    el.style.display="none";
+    window.__lastLeadAlertKey=null;
+  }
+}
 function requestNotifyPermission(){
   if(!("Notification" in window)){ alert("このブラウザは通知に対応していません"); return; }
   Notification.requestPermission().then(p=>{
@@ -2601,6 +2651,7 @@ function renderSlit(crs){
   window.__turnOrder=order.map(i=>crs[i]);
   window.__slitPos=behind.map(b=>-b);
   checkFormAlert(crs,behind);
+  checkLeadAlert(crs,behind);
   let h=panel("スリット隊形予想 — コース別ST実績×F補正。右ほど行き足先行",slitCells);
   h+=panel("1マーク直前・スタートから150m地点 — 展示タイム(直線150m)から速度を逆算。↑=スリットからの伸び返し",mCells);
   h+='<div style="font-size:11px;color:var(--faint);letter-spacing:.08em;margin:12px 0 6px">1マーク先取り予想 — 150m地点の差+内外の位置取り</div>';
