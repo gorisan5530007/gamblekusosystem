@@ -99,6 +99,61 @@ footer{margin-top:28px;font-size:12px;color:var(--faint);border-top:1px solid va
   <button onclick="resetAll()">初期化</button>
 </header>
 
+<!-- ══ 総合判断 ══ -->
+<section class="panel" style="border:1px solid var(--acc, #4ade80)">
+  <h2><span class="en">ALL-IN-ONE</span>総合判断 — 4つを貼って一度に判定</h2>
+  <p class="hint" style="margin-top:-4px">出走表・直前情報・オッズ履歴・直前オッズを、それぞれ下の欄に貼り付けてください。オッズ履歴・直前オッズは省略しても、出走表と直前情報だけで判定します。</p>
+  <div class="row" style="gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:6px">
+    <label style="font-size:12px">会場</label><select id="comboVenue" onchange="renderComboLinks()"></select>
+    <label style="font-size:12px">R</label><select id="comboRno" onchange="renderComboLinks()" style="width:64px"></select>
+    <label style="font-size:12px">開催日</label><input type="date" id="comboDate2" onchange="renderComboLinks()" style="width:150px">
+  </div>
+  <div id="comboLinks" style="font-size:12px;margin-bottom:8px"></div>
+  <div class="row" style="gap:10px;flex-wrap:wrap">
+    <div style="flex:1;min-width:260px">
+      <label style="font-size:12px">① 出走表(番組表ページ)</label> <span id="linkProg" style="font-size:11px"></span>
+      <button onclick="clearComboBox('comboProg')" style="font-size:11px;padding:1px 6px">クリア</button>
+      <textarea id="comboProg" placeholder="出走表ページを全選択コピーして貼り付け" style="min-height:90px"></textarea>
+    </div>
+    <div style="flex:1;min-width:260px">
+      <label style="font-size:12px">② 直前情報ページ</label> <span id="linkChoku" style="font-size:11px"></span>
+      <button onclick="clearComboBox('comboChoku')" style="font-size:11px;padding:1px 6px">クリア</button>
+      <textarea id="comboChoku" placeholder="直前情報ページを全選択コピーして貼り付け" style="min-height:90px"></textarea>
+    </div>
+  </div>
+  <div class="row" style="gap:10px;flex-wrap:wrap;margin-top:8px">
+    <div style="flex:1;min-width:260px">
+      <label style="font-size:12px">③ オッズ履歴ページ(任意)</label> <span id="linkOdds" style="font-size:11px"></span>
+      <button onclick="clearComboBox('comboOdds')" style="font-size:11px;padding:1px 6px">クリア</button>
+      <textarea id="comboOdds" placeholder="ボートレース日和のオッズ履歴ページを貼り付け(締切30分前〜最新)" style="min-height:90px"></textarea>
+    </div>
+    <div style="flex:1;min-width:260px">
+      <label style="font-size:12px">④ 直前オッズ(公式・任意)</label> <span id="linkFinal" style="font-size:11px"></span>
+      <button onclick="clearComboBox('comboFinal')" style="font-size:11px;padding:1px 6px">クリア</button>
+      <textarea id="comboFinal" placeholder="公式サイトの3連単オッズページ(締切直前)を貼り付け" style="min-height:90px"></textarea>
+    </div>
+  </div>
+  <div class="row" style="margin-top:8px;gap:6px;align-items:center">
+    <button class="primary" onclick="runComboJudge()">総合判定する</button>
+    <span class="msg" id="comboMsg" style="font-size:12px"></span>
+  </div>
+  <div id="comboOut" style="margin-top:10px"></div>
+  <div id="comboNoteBox" style="display:none;margin-top:12px;border-top:1px solid var(--line,#2a3440);padding-top:10px">
+    <h3 style="margin:0 0 6px;font-size:14px">note有料予想の記事</h3>
+    <div class="row" style="gap:6px;flex-wrap:wrap;align-items:center">
+      <label style="font-size:12px">会場</label><input type="text" id="cnVenue" style="width:80px">
+      <label style="font-size:12px">R</label><input type="number" id="cnRno" min="1" max="12" style="width:52px">
+      <label style="font-size:12px">締切</label><input type="text" id="cnTime" placeholder="例 15:42" style="width:64px">
+      <label style="font-size:12px">合計予算</label><input type="number" id="cnTotal" value="3000" step="100" min="100" style="width:80px"><span style="font-size:12px">円(確率比例・100円単位)</span>
+      <button onclick="makeComboNote()">記事を作る</button>
+      <button class="primary" onclick="copyComboNote()">コピー</button>
+      <span id="cnMsg" style="font-size:12px;color:var(--pos)"></span>
+    </div>
+    <textarea id="cnOut" style="min-height:260px;margin-top:6px;font-family:ui-monospace,monospace;font-size:12px"></textarea>
+    <p class="hint" style="margin:4px 0 0">「───── ここから有料 ─────」の位置で、noteの有料エリア(有料ラインの設定)を区切ってください。</p>
+  </div>
+</section>
+
 <!-- ══ 取り込み ══ -->
 <section class="panel">
   <h2><span class="en">IMPORT</span>コピペ取り込み</h2>
@@ -150,6 +205,7 @@ footer{margin-top:28px;font-size:12px;color:var(--faint);border-top:1px solid va
         <option value="strong">1コースが堅い(勝率最高＋A1)</option>
         <option value="kado">カド(4コース)が有力</option>
         <option value="aare">荒れそう(1号艇が弱い)</option>
+        <option value="gachi">ガチガチレース(点数2点以下・最有力1点買い)</option>
         <option value="all">全レース</option>
         <option value="custom">カスタム条件</option>
       </select>
@@ -162,6 +218,12 @@ footer{margin-top:28px;font-size:12px;color:var(--faint);border-top:1px solid va
         <option value="roi">推定回収率順(パターン別の検証値)</option>
         <option value="pts">点数が少ない順(ガチガチ順)</option>
       </select>
+      <label style="font-size:12px">買い方</label>
+      <select id="progFormMethod" class="s" onchange="renderReco()">
+        <option value="pool">プール220%(標準)</option>
+        <option value="poolExclTop">プール220%(着率トップ除外・再配分)</option>
+        <option value="cum">累積60-70-80</option>
+      </select>
       <button onclick="makeNote()">note用の記事を作る</button>
       <button onclick="document.getElementById('paste3').value='';document.getElementById('recoOut').innerHTML='';document.getElementById('fileName').textContent='B******.TXT を選択、または下に貼り付け';">クリア</button>
     </div>
@@ -170,36 +232,36 @@ footer{margin-top:28px;font-size:12px;color:var(--faint);border-top:1px solid va
       <div class="row" style="gap:10px;flex-wrap:wrap;align-items:flex-start">
         <span style="display:inline-flex;align-items:center;gap:3px">
           <label style="font-size:12px">推定1着率</label>
-          <select id="cu_pos" class="s"><option value="1">①</option><option value="2">②</option><option value="3">③</option><option value="4">④</option><option value="5">⑤</option><option value="6">⑥</option></select>
-          <input type="number" id="cu_plo" placeholder="下限" style="width:56px">
+          <select id="cu_pos" class="s" onchange="renderReco()"><option value="1">①</option><option value="2">②</option><option value="3">③</option><option value="4">④</option><option value="5">⑤</option><option value="6">⑥</option></select>
+          <input type="number" id="cu_plo" placeholder="下限" style="width:56px" oninput="renderReco()">
           <span style="font-size:12px;color:var(--faint)">〜</span>
-          <input type="number" id="cu_phi" placeholder="上限" style="width:56px">
+          <input type="number" id="cu_phi" placeholder="上限" style="width:56px" oninput="renderReco()">
           <span style="font-size:12px;color:var(--sub)">%</span>
         </span>
         <span style="display:inline-flex;align-items:center;gap:3px">
           <label style="font-size:12px">場</label>
-          <select id="cu_ven" class="s"><option value="">すべて</option></select>
+          <select id="cu_ven" class="s" onchange="renderReco()"><option value="">すべて</option></select>
         </span>
         <span style="display:inline-flex;align-items:center;gap:3px">
           <label style="font-size:12px">点数(プール220%)</label>
-          <input type="number" id="cu_ptslo" placeholder="下限" style="width:48px" min="1">
+          <input type="number" id="cu_ptslo" placeholder="下限" style="width:48px" min="1" oninput="renderReco()">
           <span style="font-size:12px;color:var(--faint)">〜</span>
-          <input type="number" id="cu_ptshi" placeholder="上限" value="2" style="width:48px" min="1">
+          <input type="number" id="cu_ptshi" placeholder="上限" value="2" style="width:48px" min="1" oninput="renderReco()">
           <span style="font-size:12px;color:var(--sub)">点</span>
         </span>
         <span style="display:inline-flex;align-items:center;gap:3px">
           <label style="font-size:12px">締切</label>
-          <input type="time" id="cu_tfrom" style="width:96px">
+          <input type="time" id="cu_tfrom" style="width:96px" oninput="renderReco()">
           <span style="font-size:12px;color:var(--faint)">〜</span>
-          <input type="time" id="cu_tto" style="width:96px">
+          <input type="time" id="cu_tto" style="width:96px" oninput="renderReco()">
         </span>
       </div>
       <div class="row" style="gap:10px;flex-wrap:wrap;margin-top:6px;align-items:flex-start">
         <span style="display:inline-flex;align-items:center;gap:3px">
           <label style="font-size:12px">A級の人数</label>
-          <input type="number" id="cu_nalo" placeholder="下限" style="width:52px">
+          <input type="number" id="cu_nalo" placeholder="下限" style="width:52px" oninput="renderReco()">
           <span style="font-size:12px;color:var(--faint)">〜</span>
-          <input type="number" id="cu_nahi" placeholder="上限" style="width:52px">
+          <input type="number" id="cu_nahi" placeholder="上限" style="width:52px" oninput="renderReco()">
         </span>
         <span style="display:inline-flex;align-items:center;gap:3px" id="cuGrades"></span>
       </div>
@@ -210,7 +272,7 @@ footer{margin-top:28px;font-size:12px;color:var(--faint);border-top:1px solid va
         <span style="display:inline-flex;align-items:center;gap:3px">
           <input type="checkbox" id="cu_stdiff_on">
           <label style="font-size:12px">隣接コードより外側の平均STが</label>
-          <input type="number" id="cu_stdiff" value="0.05" step="0.01" style="width:56px">
+          <input type="number" id="cu_stdiff" value="0.05" step="0.01" style="width:56px" oninput="renderReco()">
           <span style="font-size:12px;color:var(--sub)">秒以上速い艇がいる</span>
         </span>
       </div>
@@ -218,7 +280,7 @@ footer{margin-top:28px;font-size:12px;color:var(--faint);border-top:1px solid va
         <span style="display:inline-flex;align-items:center;gap:3px">
           <input type="checkbox" id="cu_makuri_on">
           <label style="font-size:12px">捲り率が</label>
-          <input type="number" id="cu_makuri" value="45" min="0" max="100" step="1" style="width:52px">
+          <input type="number" id="cu_makuri" value="45" min="0" max="100" step="1" style="width:52px" oninput="renderReco()">
           <span style="font-size:12px;color:var(--sub)">%以上の選手が</span>
           <select id="cu_makuri_range" class="s">
             <option value="2-6">2〜6コースのどこかに</option>
@@ -239,7 +301,7 @@ footer{margin-top:28px;font-size:12px;color:var(--faint);border-top:1px solid va
           <option value="md">Markdown(表つき)</option>
         </select>
         <label style="font-size:12px">件数</label>
-        <select id="noteN" class="s" onchange="makeNote()">
+        <select id="noteN" class="s" onchange="this.dataset.touched='1';makeNote()">
           <option value="5">5件</option><option value="10" selected>10件</option>
           <option value="20">20件</option><option value="999">すべて</option>
         </select>
@@ -431,6 +493,7 @@ footer{margin-top:28px;font-size:12px;color:var(--faint);border-top:1px solid va
   <p class="msg err" id="warn"></p>
   <p class="hint" id="matched" style="font-family:var(--mono)"></p>
   <div id="formAlert" style="display:none;margin:10px 0;padding:10px 12px;background:var(--pos);color:#06240f;border-radius:8px;font-size:13px"></div>
+  <div id="leadAlert" style="display:none;margin:10px 0;padding:10px 12px;background:var(--pos);color:#06240f;border-radius:8px;font-size:13px"></div>
   <div class="row" style="gap:8px;align-items:center;margin-bottom:8px">
     <label style="font-size:12px;display:flex;align-items:center;gap:4px">
       <input type="checkbox" id="notifyToggle"> 該当時に音・通知で知らせる
@@ -579,6 +642,13 @@ footer{margin-top:28px;font-size:12px;color:var(--faint);border-top:1px solid va
       </div>
       <p class="hint" style="margin:4px 0 0">1〜3着の確率をまとめて1つの集団にし、確率が高い(着順・艇)の組を降順に、合計が閾値に達するまで拾います。個別に閾値を決める方式より少ない点数で回収率が出やすい傾向があります。<br>
       検証(17,730レース・基準は個別方式60-70-80の回収率79.7%): 150%で回収率83.6%(平均1.7点) / 180%で82.1%(平均3.4点) / <b>220%で80.8%(平均10.1点・万舟98回)</b> / 250%で79.0%(平均22.3点・万舟427回)。</p>
+      <div class="row" style="margin-top:8px;gap:6px;flex-wrap:wrap;align-items:center">
+        <button onclick="applyPoolMidHouse()">中穴狙い(最有力の1点を除く)</button>
+        <span class="msg" id="poolMidNote2" style="font-size:11px;color:var(--faint)"></span>
+      </div>
+      <p class="hint" style="margin:4px 0 0">プール方式で組んだ買い目から、モデルの的中確率が最も高い1組番(＝最も人気で最も配当が低い目)だけを間引きます。候補を作り直すわけではないので、点数はほぼ変わりません。<br>
+      <b>検証済み(出走表のみ、18,873レース): 平均6.0点(通常より1点少ない)・的中26.4%・回収率79.6%で、通常のプール220%(平均7.0点・的中35.4%・回収率79.3%)とほぼ同等でした。</b>信頼区間は重なっており明確な優位とまでは言えませんが、点数(コスト)を1点減らした上で回収率が下がっていないため、実質的にはわずかに有利と考えられます。<br>
+      (参考)「着順×艇」の最有力項目を除いて候補ごと作り直す方式や、合計しきい値を250〜280%に広げる方式も試しましたが、どちらも通常方式を下回りました。</p>
       <p class="hint" id="poolNote" style="margin:4px 0 0"></p>
     </div>
   </div>
@@ -746,6 +816,13 @@ let curPos=null;
 let vh="";for(const k in V)vh+=`<option value="${k}"${k==="住之江"?" selected":""}>${k}(イン${V[k]}%)</option>`;
 document.getElementById("venue").innerHTML=vh;
 (function(){
+  const dEl=document.getElementById("comboDate2"); if(dEl) dEl.value=new Date().toISOString().slice(0,10);
+  const vSel=document.getElementById("comboVenue");
+  if(vSel){ let vh='<option value="">—</option>'; for(const k in V) vh+=`<option value="${k}">${k}</option>`; vSel.innerHTML=vh; }
+  const rSel=document.getElementById("comboRno");
+  if(rSel){ let rh='<option value="">—</option>'; for(let i=1;i<=12;i++) rh+=`<option value="${i}">${i}R</option>`; rSel.innerHTML=rh; }
+})();
+(function(){
   let o='<option value="">—</option>';
   ["桐生","戸田","江戸川","平和島","多摩川","浜名湖","蒲郡","常滑","津","三国","びわこ","住之江",
    "尼崎","鳴門","丸亀","児島","宮島","徳山","下関","若松","芦屋","福岡","唐津","大村"]
@@ -893,6 +970,8 @@ function loadProgFile(inp){
 const VENMAP={1:"桐生",2:"戸田",3:"江戸川",4:"平和島",5:"多摩川",6:"浜名湖",7:"蒲郡",8:"常滑",
  9:"津",10:"三国",11:"びわこ",12:"住之江",13:"尼崎",14:"鳴門",15:"丸亀",16:"児島",
  17:"宮島",18:"徳山",19:"下関",20:"若松",21:"芦屋",22:"福岡",23:"唐津",24:"大村"};
+const VENCODE={}; for(const k in VENMAP) VENCODE[VENMAP[k]]=+k;
+if(typeof renderComboLinks==="function") renderComboLinks();
 function parseProgram(){
   const raw0=document.getElementById("paste3").value;
   if(!raw0.trim()){setMsg("msg3","番組表の中身を貼り付けてください",false);return;}
@@ -919,7 +998,7 @@ function parseProgram(){
       deadline=dm?(dm[1]+":"+dm[2]).replace(/[０-９]/g,c=>String.fromCharCode(c.charCodeAt(0)-0xFEE0)):null;
       continue;
     }
-    m=raw.match(/^([1-6])\s+(\d{4})(.{4,8}?)(\d{2})(..)(\d{2})(A1|A2|B1|B2)\s*([\d.]+)\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)\s+(\d+)\s+([\d.]+)\s+(\d+)\s+([\d.]+)/);
+    m=raw.match(/^([1-6])\s+(\d{4})(.{4,8}?)(\d{2})(..)(\d{2})(A1|A2|B1|B2)\s*(\d+\.\d{2})\s+(\d+\.\d{2})\s+(\d+\.\d{2})\s+(\d+\.\d{2})\s+(\d+)\s+(\d+\.\d{2})\s*(\d+)\s+(\d+\.\d{2})/);   /* ボート番号が3桁だとモーター2率とくっつく(例 39.74117)ため、小数2桁で区切る */
     if(m&&rno) cur.push({lane:+m[1],toban:m[2],name:m[3].trim(),grade:m[7],
       nat:parseFloat(m[8]),loc:parseFloat(m[10]),motor:parseFloat(m[13]),boat:parseFloat(m[15])});
   }
@@ -989,7 +1068,7 @@ function evalRace(x){
   }
   kimRows.sort((a,b)=>b.p-a.p);
   const kimTop=kimRows.slice(0,3);
-  return {top1,a1,kadoStrong,weak1,nA,mx:mxNat,gap1,est:P[0],P,ord,pos:[pp1,pp2,pp3],kimTop};
+  return {top1,a1,kadoStrong,weak1,nA,mx:mxNat,gap1,est:P[0],P,ord,pos:[pp1,pp2,pp3],kimTop,strength};
 }
 function suggestBet(x,ev){
   /* あくまで出発点となる候補。番組表の情報だけで組んだ場合の回収率は約77%で、
@@ -1018,10 +1097,15 @@ function suggestBet(x,ev){
 }
 function noteList(){
   const mode=document.getElementById("recoMode").value;
-  let list=PROG.map(x=>({...x,ev:evalRace(x)}));
+  let list=PROG.map(x=>{
+    const ev=evalRace(x);
+    const pts=getFormationByMethod(ev.pos,currentFormMethod()).list.length;
+    return {...x,ev,pts};
+  });
   if(mode==="strong") list=list.filter(x=>x.ev.top1&&x.ev.a1);
   else if(mode==="kado") list=list.filter(x=>x.ev.kadoStrong);
   else if(mode==="aare") list=list.filter(x=>x.ev.weak1);
+  else if(mode==="gachi") list=list.filter(x=>x.pts<=2);
   else if(mode==="custom") list=list.filter(matchCustom);
   const sort=document.getElementById("recoSort").value;
   const tv=x=>x.dl?(+x.dl.split(":")[0])*60+(+x.dl.split(":")[1]):9999;
@@ -1066,6 +1150,36 @@ function poolFormation(pos,budget){
   Aa.forEach(a=>Bb.forEach(b=>Cc.forEach(c=>{ if(a!==b&&b!==c&&a!==c) list.push(`${a+1}-${b+1}-${c+1}`); })));
   return {A:Aa,B:Bb,C:Cc,list:[...new Set(list)]};
 }
+function getFormationByMethod(pos,methodId){
+  if(methodId==="poolExclTop") return poolFormationExcludeTop(pos,2.2);
+  if(methodId==="cum") return cumFormation(pos,0.60,0.70,0.80);
+  return poolFormation(pos,2.2);
+}
+function currentFormMethod(){
+  const el=document.getElementById("progFormMethod");
+  return el?el.value:"pool";
+}
+function poolFormationExcludeTop(pos,budget){
+  /* 全18項目(着順×艇)のうち最も確率が高い1つを候補から外した上で、
+     プール方式のアルゴリズム(確率が高い順に合計が閾値へ達するまで拾う)を最初から回し直す。
+     外した分は自動的に他の候補へ回る(次点の候補がその分多く選ばれる)。 */
+  const items=[];
+  for(let p=0;p<3;p++) for(let i=0;i<6;i++) items.push([pos[p][i],p,i]);
+  items.sort((a,b)=>b[0]-a[0]);
+  const top=items[0];
+  const rest=items.slice(1);
+  const A=new Set(),B=new Set(),C=new Set();
+  let s=0;
+  for(const [p,posIdx,i] of rest){
+    (posIdx===0?A:posIdx===1?B:C).add(i);
+    s+=p;
+    if(s>=budget) break;
+  }
+  const Aa=[...A],Bb=[...B],Cc=[...C];
+  const list=[];
+  Aa.forEach(a=>Bb.forEach(b=>Cc.forEach(c=>{ if(a!==b&&b!==c&&a!==c) list.push(`${a+1}-${b+1}-${c+1}`); })));
+  return {A:Aa,B:Bb,C:Cc,list:[...new Set(list)],excluded:{pos:top[1],boat:top[2],prob:top[0]}};
+}
 function betPlain(x,ev){
   const e=x.e, G={A1:4,A2:3,B1:2,B2:1}, ord=ev.ord;
   if(ev.est>=68){
@@ -1078,26 +1192,52 @@ function betPlain(x,ev){
   const p=ord.filter(i=>i!==0).slice(0,3).map(i=>i+1).sort((a,b)=>a-b);
   return `1-${p.join("")}=${p.join("")}`;
 }
+/* ガチガチモードの1点: プール220%の候補の中から、同時的中確率が最も高い組番を選ぶ(記事・結果検証で共通) */
+function tripleProbOf(strength,c){
+  const [i,j,m]=c.split("-").map(n=>+n-1);
+  const tot=strength.reduce((a,b)=>a+b,0);
+  const remJ=strength.reduce((a,v,idx)=>idx===i?a:a+v,0);
+  const remM=strength.reduce((a,v,idx)=>(idx===i||idx===j)?a:a+v,0);
+  return (strength[i]/tot)*(strength[j]/remJ)*(strength[m]/remM);
+}
+function gachiTopCombo(ev){
+  const f=poolFormation(ev.pos,2.2);
+  let top=null,topPr=-1;
+  f.list.forEach(c=>{ const pr=ev.strength?tripleProbOf(ev.strength,c):0; if(pr>topPr){topPr=pr; top=c;} });
+  return top;
+}
 function makeNote(){
   if(!PROG.length){setMsg("msg3","先に番組表を評価してください",false);return;}
   document.getElementById("noteBox").style.display="";
   const fmt=document.getElementById("noteFmt").value;
-  const n=+document.getElementById("noteN").value;
+  const mode0=document.getElementById("recoMode").value;
+  /* カスタム条件・ガチガチモードは、そもそも絞り込んだ結果を全部見たいのが自然なので、
+     件数欄が既定の10件のままなら自動的に「すべて」扱いにする(手動で件数を変えていればそちらを優先)。 */
+  const noteNEl=document.getElementById("noteN");
+  const n=(mode0==="custom"||mode0==="gachi")&&noteNEl.value==="10"&&!noteNEl.dataset.touched
+    ? 999 : +noteNEl.value;
   const list=noteList().slice(0,n);
   const modeLabel={strong:"1コースが堅いレース",kado:"カドが有力なレース",
-    aare:"荒れそうなレース",all:"全レース",custom:"独自条件で抽出"}[document.getElementById("recoMode").value];
+    aare:"荒れそうなレース",gachi:"ガチガチレース(点数2点以下・最有力1点買い)",all:"全レース",custom:"独自条件で抽出"}[document.getElementById("recoMode").value];
   const head=`${fmtJDate(window.__progDate)}の注目レース(${modeLabel})`;
   let t="";
   const chipTxt=i=>String(i+1);
   const joinNum=arr=>arr.map(chipTxt).join("");     /* 確率が高い順のまま連結(ソートしない) */
+  const formMethod=currentFormMethod();
+  const formMethodLabel={pool:"プール220%",poolExclTop:"プール220%・着率トップ除外",cum:"累積60-70-80"}[formMethod]||"プール220%";
+  const mode0b=document.getElementById("recoMode").value;
   const cumTxt=x=>{
-    const f=poolFormation(x.ev.pos,2.2);
+    const f=getFormationByMethod(x.ev.pos,formMethod);
+    if(mode0b==="gachi"){
+      /* ガチガチモードは、抽出時と同じプール220%の候補から最も的中確率が高い1点だけを買い目にする */
+      return `${gachiTopCombo(x.ev)}（1点）`;
+    }
     return `${joinNum(f.A)}-${joinNum(f.B)}-${joinNum(f.C)}（${f.list.length}点）`;
   };
   const kimTxt=x=>(x.ev.kimTop||[]).map(r=>`${r.c}号艇${r.km}(${(r.p*100).toFixed(1)}%)`).join(" / ");
   if(fmt==="md"){
     t=`## ${head}\n\n`
-     +`| 締切 | 場 | R | ①号艇 | 推定1着率 | 展開予想 | フォーメーション(プール220%) |\n|---|---|---|---|---|---|---|\n`
+     +`| 締切 | 場 | R | ①号艇 | 推定1着率 | 展開予想 | フォーメーション |\n|---|---|---|---|---|---|---|\n`
      +list.map(x=>`| ${x.dl||"—"} | ${VENMAP[x.v]||x.v} | ${x.r}R | ${x.e[0].name}(${x.e[0].grade} ${(x.e[0].nat||0).toFixed(2)}) | ${x.ev.est.toFixed(1)}% | ${kimTxt(x)} | ${cumTxt(x)} |`).join("\n")
      +`\n\n各艇の推定1着率\n\n`
      +list.map(x=>`- ${VENMAP[x.v]||x.v}${x.r}R … ${x.ev.P.map((p,i)=>`${i+1}号艇 ${p.toFixed(0)}%`).join(" / ")}`).join("\n");
@@ -1109,7 +1249,7 @@ function makeNote(){
          +`　①${e[0].name}(${e[0].grade}・勝率${(e[0].nat||0).toFixed(2)})\n`
          +`　推定1着率 ${x.ev.P.map((p,i)=>`${i+1}号艇${p.toFixed(0)}%`).join(" ")}\n`
          +`　展開予想 ${kimTxt(x)}\n`
-         +`　フォーメーション(プール220%) ${cumTxt(x)}`;
+         +`　フォーメーション ${cumTxt(x)}`;
      }).join("\n\n");
   }
   t+=`\n\n---\n※推定1着率・フォーメーションは公開データ約4.7万レースで学習・較正したモデルによるものです(進入は枠なり想定)。`
@@ -1120,6 +1260,7 @@ function makeNote(){
   document.getElementById("noteOut").value=t;
   setMsg("msg3",`${list.length}件を書き出しました`,true);
   window.__lastNoteList=list;   /* 結果検証記事で使う */
+  window.__lastNoteMode=mode0b;  /* 検証は、記事を作ったときの買い方で行う */
   window.__lastNoteMode=document.getElementById("recoMode").value;
 }
 let KRESULT=[];   /* [{v(場コード), r(R), combo, amount}] */
@@ -1164,11 +1305,20 @@ function verifyResults(){
     document.getElementById("verifyOut").innerHTML=`<p class="hint">${KRESULT.length}件の結果を取り込みました。先に「番組表からおすすめ抽出」→「note用の記事を作る」で予想レースを書き出してから照合してください。</p>`;
     return;
   }
-  /* 判定基準はフォーメーション(プール220%)の的中で統一する */
+  /* 判定基準は、番組表タブで選んでいる買い方(既定:プール220%)の的中で統一する */
+  const vFormMethod=currentFormMethod();
+  const vFormMethodLabel={pool:"プール220%",poolExclTop:"プール220%・着率トップ除外",cum:"累積60-70-80"}[vFormMethod]||"プール220%";
+  const isGachi=window.__lastNoteMode==="gachi";
   const rows=list.map(x=>{
     const kr=KRESULT.find(k=>k.v===x.v && k.r===x.r);
     if(!kr) return {x,kr:null};
-    const f=poolFormation(x.ev.pos,2.2);
+    if(isGachi){
+      /* ガチガチの記事は最有力1点しか載せていないので、その1点(100円)で判定する */
+      const top=gachiTopCombo(x.ev);
+      const hit=top===kr.combo;
+      return {x,kr,hit,desc:`${top}(1点)`,pts:1,cost:100,ret:hit?kr.amount:0};
+    }
+    const f=getFormationByMethod(x.ev.pos,vFormMethod);
     const hit=f.list.includes(kr.combo);
     const joinNum2=arr=>arr.map(i=>i+1).join("");   /* 確率が高い順のまま連結(ソートしない) */
     const desc=`${joinNum2(f.A)}-${joinNum2(f.B)}-${joinNum2(f.C)}(${f.list.length}点)`;
@@ -1181,7 +1331,7 @@ function verifyResults(){
   const invTotal=matched.reduce((a,r)=>a+r.cost,0);
   const retTotal=matched.reduce((a,r)=>a+r.ret,0);
   const roi=invTotal?(retTotal/invTotal*100):0;
-  let h='<table><thead><tr><th>場</th><th class="num">R</th><th>フォーメーション(プール220%)</th>'
+  let h='<table><thead><tr><th>場</th><th class="num">R</th><th>'+(isGachi?'買い目(1点)':'フォーメーション')+'</th>'
    +'<th class="num">結果(3連単)</th><th class="num">払戻</th><th>判定</th></tr></thead><tbody>';
   matched.forEach(({x,kr,hit,desc})=>{
     h+=`<tr><td style="font-size:12px">${VENMAP[x.v]||x.v}</td><td class="num">${x.r}R</td>
@@ -1192,9 +1342,10 @@ function verifyResults(){
   });
   h+="</tbody></table>";
   document.getElementById("verifyOut").innerHTML=h
-    +`<p class="hint" style="margin-top:8px">プール220%のフォーメーションで書き出した ${matched.length}/${list.length} 件のうち、的中は ${hitN} 件(${matched.length?(hitN/matched.length*100).toFixed(1):"0"}%)。`
+    +`<p class="hint" style="margin-top:8px">${isGachi?"ガチガチ(最有力1点)":"フォーメーション"}で書き出した ${matched.length}/${list.length} 件のうち、的中は ${hitN} 件(${matched.length?(hitN/matched.length*100).toFixed(1):"0"}%)。`
     +`投資${invTotal.toLocaleString()}円 → 払戻${retTotal.toLocaleString()}円(回収率${roi.toFixed(1)}%)。</p>`;
   window.__verifyRows=matched;
+  window.__verifyGachi=isGachi;
   setMsg2("verifyMsg",`${matched.length}件を照合しました`,true);
 }
 function setMsg2(id,txt,ok){const e=document.getElementById(id);e.textContent=txt;e.style.color=ok?"var(--pos)":"var(--neg)";}
@@ -1205,7 +1356,9 @@ function makeVerifyNote(){
   const invTotal=rows.reduce((a,r)=>a+r.cost,0);
   const retTotal=rows.reduce((a,r)=>a+r.ret,0);
   const roi=invTotal?(retTotal/invTotal*100):0;
-  const head=`${fmtJDate(window.__kDate||window.__progDate)}の答え合わせ — フォーメーション(プール220%)は当たったか`;
+  const vFormMethodLabel={pool:"プール220%",poolExclTop:"プール220%・着率トップ除外",cum:"累積60-70-80"}[currentFormMethod()]||"プール220%";
+  const g=!!window.__verifyGachi;
+  const head=`${fmtJDate(window.__kDate||window.__progDate)}の答え合わせ — ${g?"ガチガチレースの1点予想":"フォーメーション"}は当たったか`;
   let t=`【${head}】\n\n`
    +`照合レース数 ${rows.length}件 / 的中 ${hitN}件(${(hitN/rows.length*100).toFixed(1)}%) / `
    +`投資${invTotal.toLocaleString()}円 → 払戻${retTotal.toLocaleString()}円(回収率${roi.toFixed(1)}%)\n\n`;
@@ -1214,7 +1367,7 @@ function makeVerifyNote(){
      +`　買い目: ${desc}\n`
      +`　結果: ${kr.combo}(払戻${kr.amount.toLocaleString()}円) → ${hit?"的中":"不的中"}\n\n`;
   });
-  t+=`---\n※フォーメーションは公開データ約4.7万レースで学習・較正したモデルによるものです(進入は枠なり想定)。\n`
+  t+=`---\n※${g?"買い目(各レース最有力の1点・100円)":"フォーメーション"}は公開データ約4.7万レースで学習・較正したモデルによるものです(進入は枠なり想定)。\n`
    +`※この記事は事前の推定と結果を突き合わせた記録で、特定の賭け方を推奨するものではありません。`;
   const box=document.getElementById("verifyNoteOut");
   box.style.display=""; box.value=t;
@@ -1304,7 +1457,7 @@ function buildCustom(){
     for(let c=1;c<=6;c++){
       h+=`<span style="display:inline-flex;align-items:center;gap:1px">
         <span style="font-size:11px;color:var(--sub)">${c}</span>
-        <select id="cu_g${c}" class="s" style="font-size:11px;padding:2px 3px">
+        <select id="cu_g${c}" class="s" style="font-size:11px;padding:2px 3px" onchange="renderReco()">
           <option value="">—</option><option value="A1">A1</option><option value="A2">A2</option>
           <option value="B1">B1</option><option value="B2">B2</option>
           <option value="A1A2">A級</option><option value="B1B2">B級</option></select></span>`;
@@ -1317,8 +1470,8 @@ function buildCustom(){
     for(let c=1;c<=6;c++){
       h+=`<span style="display:inline-flex;align-items:center;gap:1px">
         <span style="font-size:11px;color:var(--sub)">${c}</span>
-        <input type="number" step="0.1" id="cu_rlo${c}" placeholder="下" style="width:44px;font-size:11px;padding:2px">
-        <input type="number" step="0.1" id="cu_rhi${c}" placeholder="上" style="width:44px;font-size:11px;padding:2px"></span>`;
+        <input type="number" step="0.1" id="cu_rlo${c}" placeholder="下" style="width:44px;font-size:11px;padding:2px" oninput="renderReco()">
+        <input type="number" step="0.1" id="cu_rhi${c}" placeholder="上" style="width:44px;font-size:11px;padding:2px" oninput="renderReco()"></span>`;
     }
     r.innerHTML=h; r.dataset.done="1";
   }
@@ -1425,7 +1578,7 @@ function renderReco(){
   document.getElementById("customBox").style.display=mode==="custom"?"":"none";
   let list=PROG.map(x=>{
     const ev=evalRace(x);const pat=classifyPattern(ev);
-    const pts=poolFormation(ev.pos,2.2).list.length;
+    const pts=getFormationByMethod(ev.pos,currentFormMethod()).list.length;
     return {...x,ev,pat,roi:PATTERN_ROI[pat],pts};
   });
   const vset=progVenueSet();
@@ -1434,6 +1587,7 @@ function renderReco(){
   if(mode==="strong") list=list.filter(x=>x.ev.top1&&x.ev.a1);
   else if(mode==="kado") list=list.filter(x=>x.ev.kadoStrong);
   else if(mode==="aare") list=list.filter(x=>x.ev.weak1);
+  else if(mode==="gachi") list=list.filter(x=>x.pts<=2);
   const sort=document.getElementById("recoSort").value;
   const tv=x=>x.dl?(+x.dl.split(":")[0])*60+(+x.dl.split(":")[1]):9999;
   if(sort==="time") list.sort((a,b)=>tv(a)-tv(b)||a.v-b.v);
@@ -2414,7 +2568,8 @@ function calc(){
 }
 function checkFormAlert(crs,behind){
   /* 「4→5の形」: 4コースが1マークで内勢(1,2,3コース)より前に出ている状態を検出して通知する。
-     蓄積データでの検証: 該当時の回収率は約90%(先取り下位3艇を切った8点で3,576レース)。 */
+     蓄積データでの検証: 該当時の回収率は約89%(先取り下位3艇を切った形で8,790レース・〜2026/9/21)。
+     ただし直近(2026/8/3〜9/21・1,447レース)は65.7%と低調。 */
   const el=document.getElementById("formAlert");
   if(!el)return;
   const lane4=crs.indexOf(4)+1;
@@ -2423,18 +2578,19 @@ function checkFormAlert(crs,behind){
   if(innerLanes.length<3){ el.style.display="none"; return; }
   /* behindは「先頭到達時の遅れ(m)」。4コースが内側全艇より遅れが小さければ前に出ている。 */
   const b4=behind[lane4-1];
-  const worstInner=Math.max(...innerLanes.map(l=>behind[l-1]));
-  const lead=worstInner-b4;   // 正の値なら4コースが内側より前
+  /* 検証時の条件(内側3艇すべてより前)に合わせ、内側で最も前にいる艇と比べる */
+  const bestInner=Math.min(...innerLanes.map(l=>behind[l-1]));
+  const lead=bestInner-b4;   // 正の値なら4コースが内側3艇すべてより前
   if(lead>=0){
     el.style.display="";
     el.innerHTML=`<b>🔔 検証済みの形に該当</b> — ④コースが1マークで内勢より${lead.toFixed(1)}m前に出ています。`
-      +`「④→⑤絡み」の形が使える状況です(蓄積データでの検証: 回収率約90%・3,576レース)。`
+      +`「④→⑤絡み」の形が使える状況です(蓄積データでの検証: 回収率約89%・8,790レース。ただし直近2026/8〜9月は65.7%と低調)。`
       +`<button style="margin-left:8px" onclick="document.getElementById('formBtns').scrollIntoView({behavior:'smooth'})">買い目を見る</button>`;
     if(document.getElementById("notifyToggle")&&document.getElementById("notifyToggle").checked
        && window.__lastAlertKey!==JSON.stringify(crs)){
       window.__lastAlertKey=JSON.stringify(crs);
       if("Notification" in window && Notification.permission==="granted"){
-        new Notification("④→⑤の形に該当",{body:`④コースが1マークで内勢より${lead.toFixed(1)}m前。回収率実績約90%の形です。`});
+        new Notification("④→⑤の形に該当",{body:`④コースが1マークで内勢より${lead.toFixed(1)}m前。回収率実績約89%(直近は低調)の形です。`});
       }
       try{
         const ctx=new (window.AudioContext||window.webkitAudioContext)();
@@ -2448,6 +2604,392 @@ function checkFormAlert(crs,behind){
     el.style.display="none";
     window.__lastAlertKey=null;
   }
+}
+function checkLeadAlert(crs,behind){
+  /* 「先行艇×捲り率」の形: 1コース以外のいずれかの艇が、1マークで他の5艇全員より2m以上前に出ており、
+     かつその艇の登録選手が該当コースでの捲り率10%以上(走数10以上)の場合に通知する。
+     蓄積データでの検証(2〜5コース・〜2026/9/21): 単勝回収率約121%(探索120.3%・検証122.4%、348レース)。
+     6コースの先行艇は45レースで53.6%と弱いため対象外。ただし6コース除外は結果を見てから決めた条件なので、今後のデータで確認が必要。 */
+  const el=document.getElementById("leadAlert");
+  if(!el)return;
+  if(typeof KIMFULL2==="undefined"){ el.style.display="none"; return; }
+  let best=null;
+  for(let c=2;c<=5;c++){   /* 6コースは先行しても1着になりにくく、単勝の実績が弱い(45レース・53.6%)ため対象外 */
+    const lane=crs.indexOf(c)+1;
+    if(!lane) continue;
+    const others=[1,2,3,4,5,6].filter(x=>x!==lane);
+    if(others.length<5) continue;
+    const bC=behind[lane-1];
+    /* 検証時の条件(他の5艇すべてより2m以上前)に合わせ、他艇で最も前にいる艇と比べる */
+    const bestOther=Math.min(...others.map(l=>behind[l-1]));
+    const lead=bestOther-bC;
+    if(lead<2) continue;
+    const tb=(document.getElementById("reg"+lane)||{}).value?.trim();
+    if(!tb) continue;
+    const rec=(KIMFULL2[tb]||{})[c];
+    if(!rec || rec[0]<10) continue;
+    const makuri=rec[2];
+    if(makuri<0.10) continue;
+    if(!best || lead>best.lead) best={lane,c,lead,makuri,tb};
+  }
+  if(best){
+    el.style.display="";
+    el.innerHTML=`<b>🔔 検証済みの形に該当</b> — ${best.c}コース(${best.lane}号艇)が1マークで他艇より${best.lead.toFixed(1)}m前に出ており、`
+      +`このコースでの捲り率が${(best.makuri*100).toFixed(1)}%(10%以上)あります。`
+      +`単勝で狙える状況です(蓄積データでの検証: 2〜5コースの先行艇で単勝回収率約121%・348レース)。`;
+    if(document.getElementById("notifyToggle")&&document.getElementById("notifyToggle").checked
+       && window.__lastLeadAlertKey!==JSON.stringify(crs)){
+      window.__lastLeadAlertKey=JSON.stringify(crs);
+      if("Notification" in window && Notification.permission==="granted"){
+        new Notification("先行艇×捲り率の形に該当",{body:`${best.c}コース(${best.lane}号艇)が${best.lead.toFixed(1)}m前・捲り率${(best.makuri*100).toFixed(1)}%。単勝回収率実績約121%(348レース)の形です。`});
+      }
+      try{
+        const ctx=new (window.AudioContext||window.webkitAudioContext)();
+        const o=ctx.createOscillator(), g=ctx.createGain();
+        o.frequency.value=660; o.connect(g); g.connect(ctx.destination);
+        g.gain.setValueAtTime(0.15,ctx.currentTime);
+        o.start(); o.stop(ctx.currentTime+0.18);
+      }catch(e){}
+    }
+  }else{
+    el.style.display="none";
+    window.__lastLeadAlertKey=null;
+  }
+}
+
+function clearComboBox(id){
+  const e=document.getElementById(id);
+  if(e) e.value="";
+}
+function renderComboLinks(){
+  const el=document.getElementById("comboLinks");
+  if(!el) return;
+  const vName=(document.getElementById("comboVenue")||{}).value;
+  const vCode=VENCODE[vName];
+  const rNo=(document.getElementById("comboRno")||{}).value;
+  const dRaw=(document.getElementById("comboDate2")||{}).value;
+  const dYmd=dRaw?dRaw.replace(/-/g,""):"";
+  const setLink=(id,url,label)=>{
+    const e=document.getElementById(id);
+    if(e) e.innerHTML = url? `<a href="${url}" target="_blank" rel="noopener">${label}</a>` : "";
+  };
+  if(vCode && rNo && dYmd){
+    const jcd=String(vCode).padStart(2,"0");
+    /* モバイル版(owsp/sp)のURL。スマホでコピー→貼り付けをそのまま行き来できるようにするため。 */
+    const urlRacelist=`https://www.boatrace.jp/owsp/sp/race/racelist?rno=${rNo}&jcd=${jcd}&hd=${dYmd}`;
+    const urlBefore=`https://www.boatrace.jp/owsp/sp/race/beforeinfo?rno=${rNo}&jcd=${jcd}&hd=${dYmd}`;
+    const urlOdds3t=`https://www.boatrace.jp/owsp/sp/race/odds3t?rno=${rNo}&jcd=${jcd}&hd=${dYmd}`;
+    const urlBiyori=`https://kyoteibiyori.com/race_shusso.php?place_no=${vCode}&race_no=${rNo}&hiduke=${dYmd}&slider=5`;
+    el.innerHTML=`<a href="${urlRacelist}" target="_blank" rel="noopener">▶ ボートレース公式でこのレースを見る</a>`
+      +`　<a href="${urlBiyori}" target="_blank" rel="noopener">▶ ボートレース日和でオッズを見る</a>`;
+    setLink("linkProg", urlRacelist, "▶ 出走表を開く");
+    setLink("linkChoku", urlBefore, "▶ 直前情報を開く");
+    setLink("linkOdds", urlBiyori, "▶ オッズ履歴を開く");
+    setLink("linkFinal", urlOdds3t, "▶ 直前オッズを開く");
+  }else{
+    el.innerHTML=`<span style="color:var(--faint)">会場・R・開催日を選ぶと、ここにリンクが出ます。</span>`;
+    ["linkProg","linkChoku","linkOdds","linkFinal"].forEach(id=>setLink(id,null,""));
+  }
+}
+function runComboJudge(){
+  const msg=document.getElementById("comboMsg");
+  const out=document.getElementById("comboOut");
+  const progT=document.getElementById("comboProg").value.trim();
+  const chokuT=document.getElementById("comboChoku").value.trim();
+  const oddsT=document.getElementById("comboOdds").value.trim();
+  const finalT=document.getElementById("comboFinal").value.trim();
+  if(!progT){ msg.innerHTML='<span class="evneg">出走表を貼り付けてください</span>'; out.innerHTML=""; return; }
+  const cv=document.getElementById("comboVenue").value, cr=document.getElementById("comboRno").value;
+  if(cv) document.getElementById("venue").value=cv;
+  if(cr) document.getElementById("rno").value=cr;
+  const isOk=id=>{const e=document.getElementById(id); return !!e && /\bok\b/.test(e.className);};
+  const txtOf=id=>{const e=document.getElementById(id); return e?e.textContent:"";};
+  const status=[];   /* [名前, 状態("ok"|"warn"|"ng"|"none"), 説明] */
+
+  /* 前のレースの値が残らないよう、毎回リセットしてから取り込む */
+  oddsMap={}; OHOFF={}; OHDATA=[]; OHHeaders=[];
+  for(let i=1;i<=6;i++){
+    document.getElementById("crs"+i).value=String(i);
+    document.getElementById("exh"+i).value="6.80";
+  }
+
+  /* ① 出走表 */
+  document.getElementById("paste0").value=progT;
+  parseSyussou();
+  if(!isOk("msg0")){
+    status.push(["出走表","ng",txtOf("msg0")||"読み取れませんでした"]);
+    out.innerHTML=renderComboStatus(status)+'<p class="evneg" style="font-size:13px">出走表を6艇分読み取れなかったため、判定を中止しました。公式サイトの出走表ページを全選択コピーして貼り付けてください。</p>';
+    msg.innerHTML='<span class="evneg">出走表を読み取れませんでした</span>';
+    return;
+  }
+  status.push(["出走表","ok",txtOf("msg0")]);
+
+  /* ② 直前情報 */
+  let chokuOk=false;
+  if(chokuT){
+    document.getElementById("paste1").value=chokuT;
+    parseChokuzen();
+    const m1=txtOf("msg1");
+    if(/艇分の展示タイムを取り込みました/.test(m1)){
+      chokuOk=true;
+      const warn=!isOk("msg1");
+      status.push(["直前情報",warn?"warn":"ok",m1]);
+    }else{
+      status.push(["直前情報","ng",m1||"読み取れませんでした"]);
+      for(let i=1;i<=6;i++){ document.getElementById("crs"+i).value=String(i); document.getElementById("exh"+i).value="6.80"; }
+    }
+  }else{
+    status.push(["直前情報","none","未入力(進入は枠なり・展示タイムは全艇同じ扱い)"]);
+  }
+  calc();
+
+  /* ③ オッズ履歴 */
+  let ohOk=false;
+  if(oddsT){
+    document.getElementById("paste5").value=oddsT;
+    parseOddsHistory();
+    ohOk = OHDATA.length>=100;
+    status.push(["オッズ履歴", ohOk?"ok":"ng", ohOk?`${OHDATA.length}通りの推移を取り込みました`:(txtOf("msg5")||"読み取れませんでした")]);
+  }else{
+    document.getElementById("paste5").value="";
+    status.push(["オッズ履歴","none","未入力"]);
+  }
+
+  /* ④ 直前オッズ */
+  if(finalT){
+    document.getElementById("paste2").value=finalT;
+    parseOdds();
+    document.getElementById("paste5b").value=finalT;
+    loadOhOfficial();
+    const n=Object.keys(OHOFF).length;
+    status.push(["直前オッズ", n>=100?"ok":"ng", n>=100?`${n}点を取り込みました(オッズ履歴の「最新」にも使用)`:(txtOf("msg5b")||"読み取れませんでした")]);
+  }else{
+    document.getElementById("paste2").value="";
+    document.getElementById("paste5b").value="";
+    status.push(["直前オッズ","none", ohOk?"未入力(オッズ履歴の最新列を使用)":"未入力"]);
+  }
+
+  /* 基準のプール220%を組む */
+  const base=poolFormation(curPos,2.2);
+  let A=new Set(base.A), B=new Set(base.B), C=new Set(base.C);
+  let ohNote="";
+  if(ohOk){
+    renderOddsHistory();
+    const laneNow={},laneOld={};
+    for(let i=1;i<=6;i++){ laneNow[i]=0; laneOld[i]=0; }
+    OHDATA.forEach(r=>{
+      const legs=r.c.split("-").map(Number);
+      legs.forEach(l=>{ laneNow[l]+=r.shareNow||0; laneOld[l]+=r.shareOld||0; });
+    });
+    const laneDelta=[1,2,3,4,5,6].map(i=>({lane:i,delta:laneNow[i]-laneOld[i]}));
+    laneDelta.sort((a,b)=>b.delta-a.delta);
+    const bestLane=laneDelta[0].lane, worstLane=laneDelta[laneDelta.length-1].lane;
+    const bi=bestLane-1, wi=worstLane-1;
+    B.add(bi); C.add(bi);
+    A.delete(wi); B.delete(wi); C.delete(wi);
+    ohNote=`オッズ履歴: 票が伸びた${bestLane}号艇を2・3着候補に追加、下がった${worstLane}号艇を候補から除外しました`
+      +`(蓄積データでの検証: 回収率約92〜95%・339レース)。`;
+  }
+  const combos=combos_(A,B,C);
+
+  const formEl=document.getElementById("formAlert");
+  const leadEl=document.getElementById("leadAlert");
+  const formHit = chokuOk && formEl && formEl.style.display!=="none" && formEl.innerHTML;
+  const leadHit = chokuOk && leadEl && leadEl.style.display!=="none" && leadEl.innerHTML;
+  const plain=html=>{ const dv=document.createElement("div"); dv.innerHTML=html||""; dv.querySelectorAll("button").forEach(b=>b.remove()); return dv.textContent.replace(/^🔔\s*/,"").trim(); };
+  window.__combo={
+    combos, A:[...A], B:[...B], C:[...C],
+    p1: curPos[0].slice(),
+    ohOk, chokuOk,
+    best: ohOk? ohNote.match(/伸びた(\d)号艇/)?.[1] : null,
+    worst: ohOk? ohNote.match(/下がった(\d)号艇/)?.[1] : null,
+    finalUsed: Object.keys(OHOFF).length>=100,
+    form: formHit? plain(formHit):"", lead: leadHit? plain(leadHit):"",
+    crs:[1,2,3,4,5,6].map(i=>+document.getElementById("crs"+i).value),
+    triMap: (function(){ const m={}; (curTri||[]).forEach(t=>{ m[t.c]=t.pr; }); return m; })(),
+    boost: (chokuOk && window.__boost)? window.__boost.list.slice() : []
+  };
+  window.__combo.form45=null;
+  if(formHit){
+    /* ④→⑤の形の買い目: 4コースの艇を1着、5コースの艇を2・3着に固定し、
+       1マーク先取り予想の下位3コースの艇を除いた残りを相手にする(ツールの「検証済みの形」ボタンと同じ組み方) */
+    const byC={}; window.__combo.crs.forEach((cc,i)=>byC[cc]=i+1);
+    const h4=byC[4], p5=byC[5], ord=window.__turnOrder;
+    if(h4&&p5&&ord){
+      const ex=new Set([h4,p5]);
+      ord.slice(-3).forEach(cc=>{ if(byC[cc]) ex.add(byC[cc]); });
+      const oth=[1,2,3,4,5,6].filter(x=>!ex.has(x));
+      const list=[]; oth.forEach(y=>{ list.push(`${h4}-${p5}-${y}`); list.push(`${h4}-${y}-${p5}`); });
+      window.__combo.form45={head:h4, partner:p5, cut:[...ex].filter(x=>x!==h4&&x!==p5), list};
+    }
+  }
+  document.getElementById("comboNoteBox").style.display="";
+  document.getElementById("cnVenue").value=document.getElementById("venue").value||"";
+  document.getElementById("cnRno").value=document.getElementById("rno").value||"";
+  document.getElementById("cnOut").value="";
+  document.getElementById("cnTime").value="";
+
+  const chip=i=>`<span class="chip" style="width:22px;height:22px;font-size:12px;background:${BC[i]};color:${BT[i]}">${i+1}</span>`;
+  let h=renderComboStatus(status);
+
+  h+=`<div class="panel" style="background:var(--panel2,#0f1720);padding:12px;border-radius:8px">`;
+  h+=`<h3 style="margin:0 0 8px">総合判定</h3>`;
+  if(combos.length){
+    h+=`<div style="margin-bottom:6px"><b>買い目(${combos.length}点)</b>: ${combos.join(" / ")}</div>`;
+  }else{
+    h+=`<div style="margin-bottom:6px" class="evneg">除外の結果、買い目が残りませんでした(見送り推奨)。</div>`;
+  }
+  h+=`<div style="font-size:12px;color:var(--sub);margin-bottom:8px">`
+    +`1着候補 ${[...A].map(chip).join("")}　2着候補 ${[...B].map(chip).join("")}　3着候補 ${[...C].map(chip).join("")}</div>`;
+  if(ohNote) h+=`<div style="font-size:12px;margin-bottom:6px">🔹 ${ohNote}</div>`;
+  else h+=`<div style="font-size:12px;color:var(--faint)">オッズ履歴を使えないため、出走表(と直前情報)のみで組んだプール220%です。</div>`;
+  if(formHit){
+    h+=`<div style="margin-top:6px;padding:8px;background:var(--pos);color:#06240f;border-radius:6px;font-size:12px">${formHit}</div>`;
+    if(window.__combo.form45 && window.__combo.form45.list.length){
+      const f=window.__combo.form45;
+      h+=`<div style="margin-top:4px;font-size:12px;color:var(--sub)">`
+        +`この形専用の買い目(4コースの${f.head}号艇1着・5コースの${f.partner}号艇2/3着、${f.cut.join("・")}号艇を除いた${f.list.length}点): `
+        +`${f.list.join(" / ")}<br>`
+        +`※上の「買い目」欄(プール220%+オッズ履歴の調整)とは別物です。「④→⑤絡み」の検証済みの回収率(全期間約89%・直近8〜9月は65.7%)は、こちらの買い目のものです。</div>`;
+    }
+  }
+  if(leadHit) h+=`<div style="margin-top:6px;padding:8px;background:var(--pos);color:#06240f;border-radius:6px;font-size:12px">${leadHit}</div>`;
+  if(chokuOk && window.__boost && window.__boost.html.length){
+    h+=`<div style="margin-top:6px;padding:8px 10px;background:var(--panel2);border-radius:6px;font-size:12px;line-height:1.9;color:var(--sub)">`
+      +`<div style="font-size:11px;color:var(--faint)">跳ね上がり条件(蓄積データで期間検証済み)</div>`
+      +window.__boost.html.join("<br>")+`</div>`;
+  }
+  if(chokuOk && !formHit && !leadHit) h+=`<div style="margin-top:6px;font-size:12px;color:var(--faint)">スリット隊形の検証済みパターン(④→⑤の形・先行艇×捲り率)には、いずれも該当していません。</div>`;
+  if(!chokuOk) h+=`<div style="margin-top:6px;font-size:12px;color:var(--faint)">直前情報を使えないため、スリット隊形のチェックはしていません。</div>`;
+  h+=`<p class="hint" style="margin:8px 0 0">※4つの貼り付けが同じレースのものかは自動では確認できません。場・R番号が揃っているかご確認ください。</p>`;
+  h+=`</div>`;
+  out.innerHTML=h;
+  const ng=status.filter(x=>x[1]==="ng").length;
+  msg.innerHTML=ng?`<span class="evneg">判定しました(読み取れなかった入力が${ng}件あります)</span>`:'<span class="evpos">総合判定を更新しました</span>';
+}
+function allocateProportional(combos, triMap, total, unit){
+  /* 買い目の合計予算を、各組番の的中確率に比例させて100円単位で配分する。
+     四捨五入の端数は、確率が高い候補から順に1単位ずつ足し引きして、合計が必ずtotalになるよう調整する。 */
+  const ws=combos.map(c=>triMap[c]||0);
+  const tw=ws.reduce((a,b)=>a+b,0)||1;
+  const targetUnits=Math.max(combos.length, Math.round(total/unit));
+  let units=ws.map(w=>Math.max(1, Math.round((total*w/tw)/unit)));
+  let diff=targetUnits-units.reduce((a,b)=>a+b,0);
+  const order=combos.map((_,i)=>i).sort((a,b)=>ws[b]-ws[a]);
+  let oi=0;
+  while(diff!==0){
+    const idx=order[oi%order.length];
+    if(diff>0){ units[idx]+=1; diff--; }
+    else if(units[idx]>1){ units[idx]-=1; diff++; }
+    oi++;
+    if(oi>10000) break;   /* 安全弁: 万一収束しない場合に無限ループを防ぐ */
+  }
+  const alloc={}; combos.forEach((c,i)=>{ alloc[c]=units[i]*unit; });
+  return alloc;
+}
+function makeComboNote(){
+  const c=window.__combo;
+  if(!c){ document.getElementById("cnMsg").textContent="先に総合判定をしてください"; return; }
+  const venue=document.getElementById("cnVenue").value.trim()||"—";
+  const rno=document.getElementById("cnRno").value||"—";
+  const tm=document.getElementById("cnTime").value.trim();
+  const total=Math.max(100,Math.round((+document.getElementById("cnTotal").value||3000)/100)*100);
+  const alloc = c.combos.length? allocateProportional(c.combos, c.triMap||{}, total, 100) : {};
+  const allocSum = arr=>arr.reduce((a,x)=>a+(alloc[x]||0),0);
+  const d=new Date(); const ds=`${d.getFullYear()}年${d.getMonth()+1}月${d.getDate()}日`;
+  const nm=i=>{ const rd=(typeof fanLookup==="function")?fanLookup(i+1):null; const cls=(document.getElementById("cls"+(i+1))||{}).value||""; const n=rd&&rd[0]?rd[0]:""; return n?(cls?`${n}(${cls})`:n):cls; };
+  const ord=[0,1,2,3,4,5].sort((a,b)=>c.p1[b]-c.p1[a]);
+  const chg=c.crs.some((v,i)=>v!==i+1);
+  const entry=c.chokuOk? [1,2,3,4,5,6].map(cs=>c.crs.indexOf(cs)+1).join("・")+(chg?"(前づけあり)":"(枠なり)") : "未確定(直前情報なし)";
+  let t="";
+  t+=`【${venue} ${rno}R 有料予想】${ds}${tm?" 締切"+tm:""}\n\n`;
+  t+=`■ レース概要\n`;
+  t+=`進入(1コースから順に艇番): ${entry}\n`;
+  t+=`モデルの推定1着率(出走表ベース)\n`;
+  ord.forEach(i=>{ t+=`　${i+1}号艇 ${nm(i)} ${(c.p1[i]*100).toFixed(1)}%\n`; });
+  t+=`\n■ 使った判定材料\n`;
+  t+=`・出走表(推定着率からプール220%で候補を作成)\n`;
+  t+=c.chokuOk?`・直前情報(展示タイム・進入からスリット隊形を推定)\n`:`・直前情報: なし\n`;
+  t+=c.ohOk?`・オッズ履歴(締切20分前→${c.finalUsed?"公式の直前オッズ":"最新"}の票の動き)\n`:`・オッズ履歴: なし\n`;
+  const pats=[];
+  if(c.form) pats.push(c.form45?`④→⑤の形(4コース=${c.form45.head}号艇、5コース=${c.form45.partner}号艇)`:"④→⑤の形");
+  if(c.lead) pats.push("先行艇×捲り率");
+  (c.boost||[]).forEach(b=>pats.push(`跳ね上がり条件: ${b.lane}号艇(${b.course}コース) ${b.label}`));
+  t+=`\n■ 該当した検証済みパターン\n${pats.length?pats.map(x=>"・"+x).join("\n"):"・なし"}\n`;
+  if(!c.combos.length){
+    t+=`\n■ 結論\nこのレースは除外の結果、買い目が残らなかったため見送りとします。\n`;
+  }else{
+    t+=`\n買い目は3連単${c.combos.length}点、確率に応じて100円単位で配分し、合計${allocSum(c.combos).toLocaleString()}円です。\n`;
+  }
+  t+=`\n───── ここから有料 ─────\n\n`;
+  if(c.combos.length){
+    t+=`■ 買い目(3連単・${c.combos.length}点、確率比例配分)\n`;
+    [...c.combos].sort((a,b)=>(alloc[b]||0)-(alloc[a]||0)).forEach(x=>{ t+=`${x}　${(alloc[x]||0).toLocaleString()}円\n`; });
+    t+=`合計 ${allocSum(c.combos).toLocaleString()}円\n`;
+    const fmt=arr=>arr.map(i=>i+1).join("");
+    t+=`(フォーメーション表記: ${fmt(c.A)}-${fmt(c.B)}-${fmt(c.C)})\n`;
+  }else{
+    t+=`■ 買い目\n見送り\n`;
+  }
+  if(c.form45&&c.form45.list.length){
+    const f=c.form45;
+    t+=`\n■ 参考: ④→⑤の形の買い目(3連単・${f.list.length}点)\n`;
+    t+=`4コースの${f.head}号艇を1着、5コースの${f.partner}号艇を2・3着に固定し、1マーク先取り予想で下位の${f.cut.join("・")}号艇を外した形です。\n`;
+    const allocF = allocateProportional(f.list, c.triMap||{}, total, 100);
+    [...f.list].sort((a,b)=>(allocF[b]||0)-(allocF[a]||0)).forEach(x=>{ t+=`${x}　${(allocF[x]||0).toLocaleString()}円\n`; });
+    t+=`合計 ${f.list.reduce((a,x)=>a+(allocF[x]||0),0).toLocaleString()}円\n`;
+  }
+  t+=`\n■ 根拠\n`;
+  if(c.ohOk) t+=`・票の動き: 直前に票が伸びた${c.best}号艇を2・3着候補に追加し、票が離れた${c.worst}号艇を候補から外しています。\n`;
+  const fm=(c.form||"").match(/内勢より(-?\d+\.\d)m/);
+  if(c.form){
+    const v=fm?parseFloat(fm[1]):null;
+    const pos=(v===null)?"内側の3艇と並ぶか前に出る":(v<0.05?"内側の3艇と並ぶ":`内側の3艇より${v.toFixed(1)}m前に出る`);
+    const f45=c.form45;
+    const who=f45?`4コースの${f45.head}号艇`:"4コースの艇";
+    t+=`・④→⑤の形: 展示タイムとSTから、${who}が1マークで${pos}隊形と推定しています。\n`;
+  }
+  const lm=(c.lead||"").match(/(\d)コース\((\d)号艇\)が1マークで他艇より(\d+\.\d)m前.*?捲り率が(\d+\.\d)%/);
+  if(c.lead&&lm) t+=`・先行艇×捲り率: ${lm[2]}号艇(${lm[1]}コース)が1マークで他の全艇より${lm[3]}m前に出る隊形と推定され、このコースでの捲り率も${lm[4]}%あります。\n`;
+  (c.boost||[]).forEach(b=>{
+    if(b.dip) t+=`・跳ね上がり条件: ${b.lane}号艇(1コース)がスリットで外側の艇より${b.label.replace(/^外勢より|凹む$/g,"")}凹む隊形で、過去の実績ではイン1着率が約${b.rate}%に下がります(基準56.5%)。\n`;
+    else t+=`・跳ね上がり条件: ${b.lane}号艇(${b.course}コース)「${b.label}」に該当。過去の実績で、このコースの1着率が${b.rate}%(このコースの平均の${b.idx}%)まで上がる条件です。\n`;
+  });
+  t+=`※買い目は総合判定(出走表のプール220%+票の動き)によるものです。検証済みパターンは展開の参考情報です。\n`;
+  if(c.lead&&lm) t+=`※単勝で狙う場合は ${lm[2]}号艇(この形の検証は単勝で行っています)。\n`;
+  t+=`\n■ 過去データでの検証値(参考)\n`;
+  t+=`・プール220%(出走表のみ): 18,873レースで回収率79.3%\n`;
+  if(c.ohOk) t+=`・票の動きによる追加・除外: 339レースで回収率約92〜95%(件数が少なく、今後変動する可能性があります)\n`;
+  if(c.form) t+=`・④→⑤の形: 8,790レースで回収率約89%(ただし直近2026年8〜9月は65.7%と低調)\n`;
+  if(c.lead) t+=`・先行艇×捲り率: 2〜5コースの先行艇348レースで単勝回収率約121%(探索120.3%・検証122.4%)。6コースの先行艇は実績が弱いため対象外にしています\n`;
+  if((c.boost||[]).length) t+=`・跳ね上がり条件: 蓄積約3.9万レースでの1着率の実績(回収率ではなく、1着になりやすさの指標です)\n`;
+  t+=`\n※上記は過去データでの検証結果であり、今後の的中や利益を保証するものではありません。舟券の購入はご自身の判断と責任で、無理のない範囲でお楽しみください。\n`;
+  t+=`※本予想は個人の分析によるもので、BOATRACE振興会・各施行者とは関係ありません。\n`;
+  t+=`※20歳未満の方は舟券を購入できません。\n`;
+  document.getElementById("cnOut").value=t;
+  document.getElementById("cnMsg").textContent="作成しました";
+}
+function copyComboNote(){
+  const ta=document.getElementById("cnOut");
+  if(!ta.value) makeComboNote();
+  const m=document.getElementById("cnMsg");
+  const done=()=>{ m.textContent="コピーしました"; setTimeout(()=>m.textContent="",2000); };
+  if(navigator.clipboard&&navigator.clipboard.writeText){
+    navigator.clipboard.writeText(ta.value).then(done).catch(()=>{ ta.select(); document.execCommand("copy"); done(); });
+  }else{ ta.select(); document.execCommand("copy"); done(); }
+}
+function renderComboStatus(status){
+  const icon={ok:"✅",warn:"⚠️",ng:"❌",none:"—"};
+  let h='<div style="font-size:12px;margin-bottom:8px;line-height:1.7">';
+  status.forEach(([name,st,txt])=>{
+    h+=`<div>${icon[st]} <b>${name}</b>: ${String(txt).replace(/</g,"&lt;")}</div>`;
+  });
+  return h+'</div>';
+}
+function combos_(A,B,C){
+  const list=[];
+  A.forEach(a=>B.forEach(b=>C.forEach(c=>{ if(a!==b&&b!==c&&a!==c) list.push(`${a+1}-${b+1}-${c+1}`); })));
+  return [...new Set(list)];
 }
 function requestNotifyPermission(){
   if(!("Notification" in window)){ alert("このブラウザは通知に対応していません"); return; }
@@ -2517,6 +3059,7 @@ function renderSlit(crs){
   window.__turnOrder=order.map(i=>crs[i]);
   window.__slitPos=behind.map(b=>-b);
   checkFormAlert(crs,behind);
+  checkLeadAlert(crs,behind);
   let h=panel("スリット隊形予想 — コース別ST実績×F補正。右ほど行き足先行",slitCells);
   h+=panel("1マーク直前・スタートから150m地点 — 展示タイム(直線150m)から速度を逆算。↑=スリットからの伸び返し",mCells);
   h+='<div style="font-size:11px;color:var(--faint);letter-spacing:.08em;margin:12px 0 6px">1マーク先取り予想 — 150m地点の差+内外の位置取り</div>';
@@ -2537,6 +3080,7 @@ function renderSlit(crs){
   const byC={}; crs.forEach((c,i)=>byC[c]=i);
   const posAt=c=>{const i=byC[c]; return i===undefined?null:-behind[i];};
   const notes=[];
+  const boostPlain=[];   /* 総合判定・note記事用に、同じ内容を文字列でも保存する */
   const gradeOf=i=>document.getElementById("cls"+(i+1)).value;
   const natOf=i=>gv("nat"+(i+1))||0;
   const exOf=i=>gv("exh"+(i+1))||9;
@@ -2559,6 +3103,7 @@ function renderSlit(crs){
       const d=ALLLEAD[c];
       notes.push(`<span class="chip" style="background:${BC[i]};color:${BT[i]};width:18px;height:18px;font-size:11px">${i+1}</span> `
         +`<b>全艇より${leadAll.toFixed(1)}m以上前(約1艇身)</b> → 実績1着率 <span class="evpos">${d.rate}%(基準の${d.idx}%)</span>`);
+      boostPlain.push({lane:i+1,course:c,label:`全艇より${leadAll.toFixed(1)}m前`,rate:d.rate,idx:d.idx});
       continue;
     }
     if(lead!==null&&lead>=2) hits.push("内勢より2m以上前");
@@ -2572,6 +3117,7 @@ function renderSlit(crs){
       if(d){
         notes.push(`<span class="chip" style="background:${BC[i]};color:${BT[i]};width:18px;height:18px;font-size:11px">${i+1}</span> `
           +`<b>${h}</b> → 実績1着率 <span class="${d.idx>=150?"evpos":""}">${d.rate}%(基準の${d.idx}%)</span>`);
+        boostPlain.push({lane:i+1,course:c,label:h,rate:d.rate,idx:d.idx});
         break;
       }
     }
@@ -2582,9 +3128,13 @@ function renderSlit(crs){
     const outs=[]; for(let x=3;x<=6;x++){const p=posAt(x); if(p!==null)outs.push(p);}
     if(outs.length){
       const dip=Math.max(...outs)-p1;
-      if(dip>=2) notes.push(`<span class="evneg">1コースが外勢より${dip.toFixed(1)}m凹む</span> — 実績ではイン1着率が約${dip>=3?39:41}%に低下(基準56.5%)`);
+      if(dip>=2){
+        notes.push(`<span class="evneg">1コースが外勢より${dip.toFixed(1)}m凹む</span> — 実績ではイン1着率が約${dip>=3?39:41}%に低下(基準56.5%)`);
+        boostPlain.push({lane:byC[1]+1,course:1,label:`外勢より${dip.toFixed(1)}m凹む`,rate:dip>=3?39:41,idx:null,dip:true});
+      }
     }
   }
+  window.__boost={html:notes.slice(), list:boostPlain};
   if(notes.length)h+='<div style="font-size:12px;color:var(--sub);margin-top:10px;line-height:1.9;'
     +'padding:8px 10px;background:var(--panel2);border-radius:6px">'
     +'<div style="font-size:11px;color:var(--faint);margin-bottom:4px">跳ね上がり条件(蓄積データで期間検証済み)</div>'
@@ -2782,6 +3332,31 @@ function applyPool(){
      </div>
      <div style="margin-top:6px;font-size:12px">${f.list.length}点 × ${unit}円 = ${cost.toLocaleString()}円`
      +`　<span style="color:var(--sub)">モデル的中確率 ${(prob*100).toFixed(1)}%</span></div>`;
+  renderTri();
+}
+function applyPoolMidHouse(){
+  if(!curPos||!curTri.length){document.getElementById("poolMidNote2").textContent="先に出走表を取り込んでください";return;}
+  const budget=Math.max(1.0,Math.min(3.0,(gv("poolBudget")||220)/100));
+  const f=poolFormation(curPos,budget);
+  if(f.list.length<2){document.getElementById("poolMidNote2").textContent="この設定では1点しか買い目がなく、中穴狙いにできません(合計しきい値を上げてください)";return;}
+  /* プール方式で組んだ買い目から、モデルの的中確率が最も高い1組番(＝最も人気で最も配当が低い目)だけを除く。
+     除外して候補を作り直すのではなく、既存の買い目から1点だけ間引くだけなので点数はほぼ変わらない。 */
+  let topC=null, topPr=-1;
+  f.list.forEach(c=>{
+    const t=curTri.find(x=>x.c===c);
+    const pr=t?t.pr:0;
+    if(pr>topPr){topPr=pr; topC=c;}
+  });
+  const filtered=f.list.filter(c=>c!==topC);
+  const unit=gv("unit")||100;
+  for(const c in picked) delete picked[c];
+  anaStake={};
+  filtered.forEach(c=>{picked[c]=true; anaStake[c]=unit;});
+  const cost=unit*filtered.length;
+  let prob=0; filtered.forEach(c=>{const t=curTri.find(x=>x.c===c); if(t)prob+=t.pr;});
+  document.getElementById("poolMidNote2").innerHTML=
+    `除いた組番: ${topC}(モデル的中確率${(topPr*100).toFixed(1)}%、買い目の中で最も人気の目) → 残り${filtered.length}点 × ${unit}円 = ${cost.toLocaleString()}円`
+    +`　<span style="color:var(--sub)">合計的中確率 ${(prob*100).toFixed(1)}%</span>`;
   renderTri();
 }
 function applyCum(){
