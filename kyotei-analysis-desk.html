@@ -2572,8 +2572,9 @@ function checkFormAlert(crs,behind){
   if(innerLanes.length<3){ el.style.display="none"; return; }
   /* behindは「先頭到達時の遅れ(m)」。4コースが内側全艇より遅れが小さければ前に出ている。 */
   const b4=behind[lane4-1];
-  const worstInner=Math.max(...innerLanes.map(l=>behind[l-1]));
-  const lead=worstInner-b4;   // 正の値なら4コースが内側より前
+  /* 検証時の条件(内側3艇すべてより前)に合わせ、内側で最も前にいる艇と比べる */
+  const bestInner=Math.min(...innerLanes.map(l=>behind[l-1]));
+  const lead=bestInner-b4;   // 正の値なら4コースが内側3艇すべてより前
   if(lead>=0){
     el.style.display="";
     el.innerHTML=`<b>🔔 検証済みの形に該当</b> — ④コースが1マークで内勢より${lead.toFixed(1)}m前に出ています。`
@@ -2612,8 +2613,9 @@ function checkLeadAlert(crs,behind){
     const others=[1,2,3,4,5,6].filter(x=>x!==lane);
     if(others.length<5) continue;
     const bC=behind[lane-1];
-    const worstOther=Math.max(...others.map(l=>behind[l-1]));
-    const lead=worstOther-bC;
+    /* 検証時の条件(他の5艇すべてより2m以上前)に合わせ、他艇で最も前にいる艇と比べる */
+    const bestOther=Math.min(...others.map(l=>behind[l-1]));
+    const lead=bestOther-bC;
     if(lead<2) continue;
     const tb=(document.getElementById("reg"+lane)||{}).value?.trim();
     if(!tb) continue;
@@ -2833,7 +2835,16 @@ function runComboJudge(){
     +`1着候補 ${[...A].map(chip).join("")}　2着候補 ${[...B].map(chip).join("")}　3着候補 ${[...C].map(chip).join("")}</div>`;
   if(ohNote) h+=`<div style="font-size:12px;margin-bottom:6px">🔹 ${ohNote}</div>`;
   else h+=`<div style="font-size:12px;color:var(--faint)">オッズ履歴を使えないため、出走表(と直前情報)のみで組んだプール220%です。</div>`;
-  if(formHit) h+=`<div style="margin-top:6px;padding:8px;background:var(--pos);color:#06240f;border-radius:6px;font-size:12px">${formHit}</div>`;
+  if(formHit){
+    h+=`<div style="margin-top:6px;padding:8px;background:var(--pos);color:#06240f;border-radius:6px;font-size:12px">${formHit}</div>`;
+    if(window.__combo.form45 && window.__combo.form45.list.length){
+      const f=window.__combo.form45;
+      h+=`<div style="margin-top:4px;font-size:12px;color:var(--sub)">`
+        +`この形専用の買い目(4コースの${f.head}号艇1着・5コースの${f.partner}号艇2/3着、${f.cut.join("・")}号艇を除いた${f.list.length}点): `
+        +`${f.list.join(" / ")}<br>`
+        +`※上の「買い目」欄(プール220%+オッズ履歴の調整)とは別物です。「④→⑤絡み」の検証済みの回収率(約90%)は、こちらの買い目のものです。</div>`;
+    }
+  }
   if(leadHit) h+=`<div style="margin-top:6px;padding:8px;background:var(--pos);color:#06240f;border-radius:6px;font-size:12px">${leadHit}</div>`;
   if(chokuOk && !formHit && !leadHit) h+=`<div style="margin-top:6px;font-size:12px;color:var(--faint)">スリット隊形の検証済みパターン(④→⑤の形・先行艇×捲り率)には、いずれも該当していません。</div>`;
   if(!chokuOk) h+=`<div style="margin-top:6px;font-size:12px;color:var(--faint)">直前情報を使えないため、スリット隊形のチェックはしていません。</div>`;
