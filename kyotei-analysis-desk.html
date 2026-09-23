@@ -103,6 +103,12 @@ footer{margin-top:28px;font-size:12px;color:var(--faint);border-top:1px solid va
 <section class="panel" style="border:1px solid var(--acc, #4ade80)">
   <h2><span class="en">ALL-IN-ONE</span>総合判断 — 4つを貼って一度に判定</h2>
   <p class="hint" style="margin-top:-4px">出走表・直前情報・オッズ履歴・直前オッズを、それぞれ下の欄に貼り付けてください。オッズ履歴・直前オッズは省略しても、出走表と直前情報だけで判定します。</p>
+  <div class="row" style="gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:6px">
+    <label style="font-size:12px">会場</label><select id="comboVenue" onchange="renderComboLinks()"></select>
+    <label style="font-size:12px">R</label><select id="comboRno" onchange="renderComboLinks()" style="width:64px"></select>
+    <label style="font-size:12px">開催日</label><input type="date" id="comboDate2" onchange="renderComboLinks()" style="width:150px">
+  </div>
+  <div id="comboLinks" style="font-size:12px;margin-bottom:8px"></div>
   <div class="row" style="gap:10px;flex-wrap:wrap">
     <div style="flex:1;min-width:260px">
       <label style="font-size:12px">① 出走表(番組表ページ)</label>
@@ -123,7 +129,7 @@ footer{margin-top:28px;font-size:12px;color:var(--faint);border-top:1px solid va
       <textarea id="comboFinal" placeholder="公式サイトの3連単オッズページ(締切直前)を貼り付け" style="min-height:90px"></textarea>
     </div>
   </div>
-  <div class="row" style="margin-top:8px;gap:6px">
+  <div class="row" style="margin-top:8px;gap:6px;align-items:center">
     <button class="primary" onclick="runComboJudge()">総合判定する</button>
     <span class="msg" id="comboMsg" style="font-size:12px"></span>
   </div>
@@ -806,6 +812,13 @@ let curPos=null;
 let vh="";for(const k in V)vh+=`<option value="${k}"${k==="住之江"?" selected":""}>${k}(イン${V[k]}%)</option>`;
 document.getElementById("venue").innerHTML=vh;
 (function(){
+  const dEl=document.getElementById("comboDate2"); if(dEl) dEl.value=new Date().toISOString().slice(0,10);
+  const vSel=document.getElementById("comboVenue");
+  if(vSel){ let vh=""; for(const k in V) vh+=`<option value="${k}"${k==="住之江"?" selected":""}>${k}</option>`; vSel.innerHTML=vh; }
+  const rSel=document.getElementById("comboRno");
+  if(rSel){ let rh='<option value="">—</option>'; for(let i=1;i<=12;i++) rh+=`<option value="${i}">${i}R</option>`; rSel.innerHTML=rh; }
+})();
+(function(){
   let o='<option value="">—</option>';
   ["桐生","戸田","江戸川","平和島","多摩川","浜名湖","蒲郡","常滑","津","三国","びわこ","住之江",
    "尼崎","鳴門","丸亀","児島","宮島","徳山","下関","若松","芦屋","福岡","唐津","大村"]
@@ -953,6 +966,8 @@ function loadProgFile(inp){
 const VENMAP={1:"桐生",2:"戸田",3:"江戸川",4:"平和島",5:"多摩川",6:"浜名湖",7:"蒲郡",8:"常滑",
  9:"津",10:"三国",11:"びわこ",12:"住之江",13:"尼崎",14:"鳴門",15:"丸亀",16:"児島",
  17:"宮島",18:"徳山",19:"下関",20:"若松",21:"芦屋",22:"福岡",23:"唐津",24:"大村"};
+const VENCODE={}; for(const k in VENMAP) VENCODE[VENMAP[k]]=+k;
+if(typeof renderComboLinks==="function") renderComboLinks();
 function parseProgram(){
   const raw0=document.getElementById("paste3").value;
   if(!raw0.trim()){setMsg("msg3","番組表の中身を貼り付けてください",false);return;}
@@ -2629,6 +2644,24 @@ function checkLeadAlert(crs,behind){
   }
 }
 
+function renderComboLinks(){
+  const el=document.getElementById("comboLinks");
+  if(!el) return;
+  const vName=(document.getElementById("comboVenue")||{}).value;
+  const vCode=VENCODE[vName];
+  const rNo=(document.getElementById("comboRno")||{}).value;
+  const dRaw=(document.getElementById("comboDate2")||{}).value;
+  const dYmd=dRaw?dRaw.replace(/-/g,""):"";
+  if(vCode && rNo && dYmd){
+    const jcd=String(vCode).padStart(2,"0");
+    const urlOff=`https://www.boatrace.jp/owpc/pc/race/racelist?rno=${rNo}&jcd=${jcd}&hd=${dYmd}`;
+    const urlBiyori=`https://kyoteibiyori.com/race_shusso.php?place_no=${vCode}&race_no=${rNo}&hiduke=${dYmd}&slider=5`;
+    el.innerHTML=`<a href="${urlOff}" target="_blank" rel="noopener">▶ ボートレース公式でこのレースを見る</a>`
+      +`　<a href="${urlBiyori}" target="_blank" rel="noopener">▶ ボートレース日和でオッズを見る</a>`;
+  }else{
+    el.innerHTML=`<span style="color:var(--faint)">会場・R・開催日を選ぶと、ここにリンクが出ます。</span>`;
+  }
+}
 function runComboJudge(){
   const msg=document.getElementById("comboMsg");
   const out=document.getElementById("comboOut");
@@ -2637,6 +2670,9 @@ function runComboJudge(){
   const oddsT=document.getElementById("comboOdds").value.trim();
   const finalT=document.getElementById("comboFinal").value.trim();
   if(!progT){ msg.innerHTML='<span class="evneg">出走表を貼り付けてください</span>'; out.innerHTML=""; return; }
+  const cv=document.getElementById("comboVenue").value, cr=document.getElementById("comboRno").value;
+  if(cv) document.getElementById("venue").value=cv;
+  if(cr) document.getElementById("rno").value=cr;
   const isOk=id=>{const e=document.getElementById(id); return !!e && /\bok\b/.test(e.className);};
   const txtOf=id=>{const e=document.getElementById(id); return e?e.textContent:"";};
   const status=[];   /* [名前, 状態("ok"|"warn"|"ng"|"none"), 説明] */
@@ -2764,6 +2800,7 @@ function runComboJudge(){
 
   const chip=i=>`<span class="chip" style="width:22px;height:22px;font-size:12px;background:${BC[i]};color:${BT[i]}">${i+1}</span>`;
   let h=renderComboStatus(status);
+
   h+=`<div class="panel" style="background:var(--panel2,#0f1720);padding:12px;border-radius:8px">`;
   h+=`<h3 style="margin:0 0 8px">総合判定</h3>`;
   if(combos.length){
