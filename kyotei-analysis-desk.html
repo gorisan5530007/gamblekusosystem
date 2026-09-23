@@ -111,21 +111,25 @@ footer{margin-top:28px;font-size:12px;color:var(--faint);border-top:1px solid va
   <div id="comboLinks" style="font-size:12px;margin-bottom:8px"></div>
   <div class="row" style="gap:10px;flex-wrap:wrap">
     <div style="flex:1;min-width:260px">
-      <label style="font-size:12px">① 出走表(番組表ページ)</label>
+      <label style="font-size:12px">① 出走表(番組表ページ)</label> <span id="linkProg" style="font-size:11px"></span>
+      <button onclick="clearComboBox('comboProg')" style="font-size:11px;padding:1px 6px">クリア</button>
       <textarea id="comboProg" placeholder="出走表ページを全選択コピーして貼り付け" style="min-height:90px"></textarea>
     </div>
     <div style="flex:1;min-width:260px">
-      <label style="font-size:12px">② 直前情報ページ</label>
+      <label style="font-size:12px">② 直前情報ページ</label> <span id="linkChoku" style="font-size:11px"></span>
+      <button onclick="clearComboBox('comboChoku')" style="font-size:11px;padding:1px 6px">クリア</button>
       <textarea id="comboChoku" placeholder="直前情報ページを全選択コピーして貼り付け" style="min-height:90px"></textarea>
     </div>
   </div>
   <div class="row" style="gap:10px;flex-wrap:wrap;margin-top:8px">
     <div style="flex:1;min-width:260px">
-      <label style="font-size:12px">③ オッズ履歴ページ(任意)</label>
+      <label style="font-size:12px">③ オッズ履歴ページ(任意)</label> <span id="linkOdds" style="font-size:11px"></span>
+      <button onclick="clearComboBox('comboOdds')" style="font-size:11px;padding:1px 6px">クリア</button>
       <textarea id="comboOdds" placeholder="ボートレース日和のオッズ履歴ページを貼り付け(締切30分前〜最新)" style="min-height:90px"></textarea>
     </div>
     <div style="flex:1;min-width:260px">
-      <label style="font-size:12px">④ 直前オッズ(公式・任意)</label>
+      <label style="font-size:12px">④ 直前オッズ(公式・任意)</label> <span id="linkFinal" style="font-size:11px"></span>
+      <button onclick="clearComboBox('comboFinal')" style="font-size:11px;padding:1px 6px">クリア</button>
       <textarea id="comboFinal" placeholder="公式サイトの3連単オッズページ(締切直前)を貼り付け" style="min-height:90px"></textarea>
     </div>
   </div>
@@ -2644,6 +2648,10 @@ function checkLeadAlert(crs,behind){
   }
 }
 
+function clearComboBox(id){
+  const e=document.getElementById(id);
+  if(e) e.value="";
+}
 function renderComboLinks(){
   const el=document.getElementById("comboLinks");
   if(!el) return;
@@ -2652,14 +2660,26 @@ function renderComboLinks(){
   const rNo=(document.getElementById("comboRno")||{}).value;
   const dRaw=(document.getElementById("comboDate2")||{}).value;
   const dYmd=dRaw?dRaw.replace(/-/g,""):"";
+  const setLink=(id,url,label)=>{
+    const e=document.getElementById(id);
+    if(e) e.innerHTML = url? `<a href="${url}" target="_blank" rel="noopener">${label}</a>` : "";
+  };
   if(vCode && rNo && dYmd){
     const jcd=String(vCode).padStart(2,"0");
-    const urlOff=`https://www.boatrace.jp/owpc/pc/race/racelist?rno=${rNo}&jcd=${jcd}&hd=${dYmd}`;
+    /* モバイル版(owsp/sp)のURL。スマホでコピー→貼り付けをそのまま行き来できるようにするため。 */
+    const urlRacelist=`https://www.boatrace.jp/owsp/sp/race/racelist?rno=${rNo}&jcd=${jcd}&hd=${dYmd}`;
+    const urlBefore=`https://www.boatrace.jp/owsp/sp/race/beforeinfo?rno=${rNo}&jcd=${jcd}&hd=${dYmd}`;
+    const urlOdds3t=`https://www.boatrace.jp/owsp/sp/race/odds3t?rno=${rNo}&jcd=${jcd}&hd=${dYmd}`;
     const urlBiyori=`https://kyoteibiyori.com/race_shusso.php?place_no=${vCode}&race_no=${rNo}&hiduke=${dYmd}&slider=5`;
-    el.innerHTML=`<a href="${urlOff}" target="_blank" rel="noopener">▶ ボートレース公式でこのレースを見る</a>`
+    el.innerHTML=`<a href="${urlRacelist}" target="_blank" rel="noopener">▶ ボートレース公式でこのレースを見る</a>`
       +`　<a href="${urlBiyori}" target="_blank" rel="noopener">▶ ボートレース日和でオッズを見る</a>`;
+    setLink("linkProg", urlRacelist, "▶ 出走表を開く");
+    setLink("linkChoku", urlBefore, "▶ 直前情報を開く");
+    setLink("linkOdds", urlBiyori, "▶ オッズ履歴を開く");
+    setLink("linkFinal", urlOdds3t, "▶ 直前オッズを開く");
   }else{
     el.innerHTML=`<span style="color:var(--faint)">会場・R・開催日を選ぶと、ここにリンクが出ます。</span>`;
+    ["linkProg","linkChoku","linkOdds","linkFinal"].forEach(id=>setLink(id,null,""));
   }
 }
 function runComboJudge(){
