@@ -99,6 +99,37 @@ footer{margin-top:28px;font-size:12px;color:var(--faint);border-top:1px solid va
   <button onclick="resetAll()">初期化</button>
 </header>
 
+<!-- ══ 総合判断 ══ -->
+<section class="panel" style="border:1px solid var(--acc, #4ade80)">
+  <h2><span class="en">ALL-IN-ONE</span>総合判断 — 4つを貼って一度に判定</h2>
+  <p class="hint" style="margin-top:-4px">出走表・直前情報・オッズ履歴・直前オッズを、それぞれ下の欄に貼り付けてください。オッズ履歴・直前オッズは省略しても、出走表と直前情報だけで判定します。</p>
+  <div class="row" style="gap:10px;flex-wrap:wrap">
+    <div style="flex:1;min-width:260px">
+      <label style="font-size:12px">① 出走表(番組表ページ)</label>
+      <textarea id="comboProg" placeholder="出走表ページを全選択コピーして貼り付け" style="min-height:90px"></textarea>
+    </div>
+    <div style="flex:1;min-width:260px">
+      <label style="font-size:12px">② 直前情報ページ</label>
+      <textarea id="comboChoku" placeholder="直前情報ページを全選択コピーして貼り付け" style="min-height:90px"></textarea>
+    </div>
+  </div>
+  <div class="row" style="gap:10px;flex-wrap:wrap;margin-top:8px">
+    <div style="flex:1;min-width:260px">
+      <label style="font-size:12px">③ オッズ履歴ページ(任意)</label>
+      <textarea id="comboOdds" placeholder="ボートレース日和のオッズ履歴ページを貼り付け(締切30分前〜最新)" style="min-height:90px"></textarea>
+    </div>
+    <div style="flex:1;min-width:260px">
+      <label style="font-size:12px">④ 直前オッズ(公式・任意)</label>
+      <textarea id="comboFinal" placeholder="公式サイトの3連単オッズページ(締切直前)を貼り付け" style="min-height:90px"></textarea>
+    </div>
+  </div>
+  <div class="row" style="margin-top:8px;gap:6px">
+    <button class="primary" onclick="runComboJudge()">総合判定する</button>
+    <span class="msg" id="comboMsg" style="font-size:12px"></span>
+  </div>
+  <div id="comboOut" style="margin-top:10px"></div>
+</section>
+
 <!-- ══ 取り込み ══ -->
 <section class="panel">
   <h2><span class="en">IMPORT</span>コピペ取り込み</h2>
@@ -2582,6 +2613,146 @@ function checkLeadAlert(crs,behind){
     el.style.display="none";
     window.__lastLeadAlertKey=null;
   }
+}
+
+function runComboJudge(){
+  const msg=document.getElementById("comboMsg");
+  const out=document.getElementById("comboOut");
+  const progT=document.getElementById("comboProg").value.trim();
+  const chokuT=document.getElementById("comboChoku").value.trim();
+  const oddsT=document.getElementById("comboOdds").value.trim();
+  const finalT=document.getElementById("comboFinal").value.trim();
+  if(!progT){ msg.innerHTML='<span class="evneg">出走表を貼り付けてください</span>'; out.innerHTML=""; return; }
+  const isOk=id=>{const e=document.getElementById(id); return !!e && /\bok\b/.test(e.className);};
+  const txtOf=id=>{const e=document.getElementById(id); return e?e.textContent:"";};
+  const status=[];   /* [名前, 状態("ok"|"warn"|"ng"|"none"), 説明] */
+
+  /* 前のレースの値が残らないよう、毎回リセットしてから取り込む */
+  oddsMap={}; OHOFF={}; OHDATA=[]; OHHeaders=[];
+  for(let i=1;i<=6;i++){
+    document.getElementById("crs"+i).value=String(i);
+    document.getElementById("exh"+i).value="6.80";
+  }
+
+  /* ① 出走表 */
+  document.getElementById("paste0").value=progT;
+  parseSyussou();
+  if(!isOk("msg0")){
+    status.push(["出走表","ng",txtOf("msg0")||"読み取れませんでした"]);
+    out.innerHTML=renderComboStatus(status)+'<p class="evneg" style="font-size:13px">出走表を6艇分読み取れなかったため、判定を中止しました。公式サイトの出走表ページを全選択コピーして貼り付けてください。</p>';
+    msg.innerHTML='<span class="evneg">出走表を読み取れませんでした</span>';
+    return;
+  }
+  status.push(["出走表","ok",txtOf("msg0")]);
+
+  /* ② 直前情報 */
+  let chokuOk=false;
+  if(chokuT){
+    document.getElementById("paste1").value=chokuT;
+    parseChokuzen();
+    const m1=txtOf("msg1");
+    if(/艇分の展示タイムを取り込みました/.test(m1)){
+      chokuOk=true;
+      const warn=!isOk("msg1");
+      status.push(["直前情報",warn?"warn":"ok",m1]);
+    }else{
+      status.push(["直前情報","ng",m1||"読み取れませんでした"]);
+      for(let i=1;i<=6;i++){ document.getElementById("crs"+i).value=String(i); document.getElementById("exh"+i).value="6.80"; }
+    }
+  }else{
+    status.push(["直前情報","none","未入力(進入は枠なり・展示タイムは全艇同じ扱い)"]);
+  }
+  calc();
+
+  /* ③ オッズ履歴 */
+  let ohOk=false;
+  if(oddsT){
+    document.getElementById("paste5").value=oddsT;
+    parseOddsHistory();
+    ohOk = OHDATA.length>=100;
+    status.push(["オッズ履歴", ohOk?"ok":"ng", ohOk?`${OHDATA.length}通りの推移を取り込みました`:(txtOf("msg5")||"読み取れませんでした")]);
+  }else{
+    document.getElementById("paste5").value="";
+    status.push(["オッズ履歴","none","未入力"]);
+  }
+
+  /* ④ 直前オッズ */
+  if(finalT){
+    document.getElementById("paste2").value=finalT;
+    parseOdds();
+    document.getElementById("paste5b").value=finalT;
+    loadOhOfficial();
+    const n=Object.keys(OHOFF).length;
+    status.push(["直前オッズ", n>=100?"ok":"ng", n>=100?`${n}点を取り込みました(オッズ履歴の「最新」にも使用)`:(txtOf("msg5b")||"読み取れませんでした")]);
+  }else{
+    document.getElementById("paste2").value="";
+    document.getElementById("paste5b").value="";
+    status.push(["直前オッズ","none", ohOk?"未入力(オッズ履歴の最新列を使用)":"未入力"]);
+  }
+
+  /* 基準のプール220%を組む */
+  const base=poolFormation(curPos,2.2);
+  let A=new Set(base.A), B=new Set(base.B), C=new Set(base.C);
+  let ohNote="";
+  if(ohOk){
+    renderOddsHistory();
+    const laneNow={},laneOld={};
+    for(let i=1;i<=6;i++){ laneNow[i]=0; laneOld[i]=0; }
+    OHDATA.forEach(r=>{
+      const legs=r.c.split("-").map(Number);
+      legs.forEach(l=>{ laneNow[l]+=r.shareNow||0; laneOld[l]+=r.shareOld||0; });
+    });
+    const laneDelta=[1,2,3,4,5,6].map(i=>({lane:i,delta:laneNow[i]-laneOld[i]}));
+    laneDelta.sort((a,b)=>b.delta-a.delta);
+    const bestLane=laneDelta[0].lane, worstLane=laneDelta[laneDelta.length-1].lane;
+    const bi=bestLane-1, wi=worstLane-1;
+    B.add(bi); C.add(bi);
+    A.delete(wi); B.delete(wi); C.delete(wi);
+    ohNote=`オッズ履歴: 票が伸びた${bestLane}号艇を2・3着候補に追加、下がった${worstLane}号艇を候補から除外しました`
+      +`(蓄積データでの検証: 回収率約92〜95%・339レース)。`;
+  }
+  const combos=combos_(A,B,C);
+
+  const formEl=document.getElementById("formAlert");
+  const leadEl=document.getElementById("leadAlert");
+  const formHit = chokuOk && formEl && formEl.style.display!=="none" && formEl.innerHTML;
+  const leadHit = chokuOk && leadEl && leadEl.style.display!=="none" && leadEl.innerHTML;
+
+  const chip=i=>`<span class="chip" style="width:22px;height:22px;font-size:12px;background:${BC[i]};color:${BT[i]}">${i+1}</span>`;
+  let h=renderComboStatus(status);
+  h+=`<div class="panel" style="background:var(--panel2,#0f1720);padding:12px;border-radius:8px">`;
+  h+=`<h3 style="margin:0 0 8px">総合判定</h3>`;
+  if(combos.length){
+    h+=`<div style="margin-bottom:6px"><b>買い目(${combos.length}点)</b>: ${combos.join(" / ")}</div>`;
+  }else{
+    h+=`<div style="margin-bottom:6px" class="evneg">除外の結果、買い目が残りませんでした(見送り推奨)。</div>`;
+  }
+  h+=`<div style="font-size:12px;color:var(--sub);margin-bottom:8px">`
+    +`1着候補 ${[...A].map(chip).join("")}　2着候補 ${[...B].map(chip).join("")}　3着候補 ${[...C].map(chip).join("")}</div>`;
+  if(ohNote) h+=`<div style="font-size:12px;margin-bottom:6px">🔹 ${ohNote}</div>`;
+  else h+=`<div style="font-size:12px;color:var(--faint)">オッズ履歴を使えないため、出走表(と直前情報)のみで組んだプール220%です。</div>`;
+  if(formHit) h+=`<div style="margin-top:6px;padding:8px;background:var(--pos);color:#06240f;border-radius:6px;font-size:12px">${formHit}</div>`;
+  if(leadHit) h+=`<div style="margin-top:6px;padding:8px;background:var(--pos);color:#06240f;border-radius:6px;font-size:12px">${leadHit}</div>`;
+  if(chokuOk && !formHit && !leadHit) h+=`<div style="margin-top:6px;font-size:12px;color:var(--faint)">スリット隊形の検証済みパターン(④→⑤の形・先行艇×捲り率)には、いずれも該当していません。</div>`;
+  if(!chokuOk) h+=`<div style="margin-top:6px;font-size:12px;color:var(--faint)">直前情報を使えないため、スリット隊形のチェックはしていません。</div>`;
+  h+=`<p class="hint" style="margin:8px 0 0">※4つの貼り付けが同じレースのものかは自動では確認できません。場・R番号が揃っているかご確認ください。</p>`;
+  h+=`</div>`;
+  out.innerHTML=h;
+  const ng=status.filter(x=>x[1]==="ng").length;
+  msg.innerHTML=ng?`<span class="evneg">判定しました(読み取れなかった入力が${ng}件あります)</span>`:'<span class="evpos">総合判定を更新しました</span>';
+}
+function renderComboStatus(status){
+  const icon={ok:"✅",warn:"⚠️",ng:"❌",none:"—"};
+  let h='<div style="font-size:12px;margin-bottom:8px;line-height:1.7">';
+  status.forEach(([name,st,txt])=>{
+    h+=`<div>${icon[st]} <b>${name}</b>: ${String(txt).replace(/</g,"&lt;")}</div>`;
+  });
+  return h+'</div>';
+}
+function combos_(A,B,C){
+  const list=[];
+  A.forEach(a=>B.forEach(b=>C.forEach(c=>{ if(a!==b&&b!==c&&a!==c) list.push(`${a+1}-${b+1}-${c+1}`); })));
+  return [...new Set(list)];
 }
 function requestNotifyPermission(){
   if(!("Notification" in window)){ alert("このブラウザは通知に対応していません"); return; }
