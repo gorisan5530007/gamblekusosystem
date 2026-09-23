@@ -140,7 +140,7 @@ footer{margin-top:28px;font-size:12px;color:var(--faint);border-top:1px solid va
       <label style="font-size:12px">会場</label><input type="text" id="cnVenue" style="width:80px">
       <label style="font-size:12px">R</label><input type="number" id="cnRno" min="1" max="12" style="width:52px">
       <label style="font-size:12px">締切</label><input type="text" id="cnTime" placeholder="例 15:42" style="width:64px">
-      <label style="font-size:12px">1点</label><input type="number" id="cnUnit" value="100" step="100" min="100" style="width:70px"><span style="font-size:12px">円</span>
+      <label style="font-size:12px">合計予算</label><input type="number" id="cnTotal" value="3000" step="100" min="100" style="width:80px"><span style="font-size:12px">円(確率比例・100円単位)</span>
       <button onclick="makeComboNote()">記事を作る</button>
       <button class="primary" onclick="copyComboNote()">コピー</button>
       <span id="cnMsg" style="font-size:12px;color:var(--pos)"></span>
@@ -2776,7 +2776,8 @@ function runComboJudge(){
     worst: ohOk? ohNote.match(/下がった(\d)号艇/)?.[1] : null,
     finalUsed: Object.keys(OHOFF).length>=100,
     form: formHit? plain(formHit):"", lead: leadHit? plain(leadHit):"",
-    crs:[1,2,3,4,5,6].map(i=>+document.getElementById("crs"+i).value)
+    crs:[1,2,3,4,5,6].map(i=>+document.getElementById("crs"+i).value),
+    triMap: (function(){ const m={}; (curTri||[]).forEach(t=>{ m[t.c]=t.pr; }); return m; })()
   };
   window.__combo.form45=null;
   if(formHit){
@@ -2822,13 +2823,35 @@ function runComboJudge(){
   const ng=status.filter(x=>x[1]==="ng").length;
   msg.innerHTML=ng?`<span class="evneg">判定しました(読み取れなかった入力が${ng}件あります)</span>`:'<span class="evpos">総合判定を更新しました</span>';
 }
+function allocateProportional(combos, triMap, total, unit){
+  /* 買い目の合計予算を、各組番の的中確率に比例させて100円単位で配分する。
+     四捨五入の端数は、確率が高い候補から順に1単位ずつ足し引きして、合計が必ずtotalになるよう調整する。 */
+  const ws=combos.map(c=>triMap[c]||0);
+  const tw=ws.reduce((a,b)=>a+b,0)||1;
+  const targetUnits=Math.max(combos.length, Math.round(total/unit));
+  let units=ws.map(w=>Math.max(1, Math.round((total*w/tw)/unit)));
+  let diff=targetUnits-units.reduce((a,b)=>a+b,0);
+  const order=combos.map((_,i)=>i).sort((a,b)=>ws[b]-ws[a]);
+  let oi=0;
+  while(diff!==0){
+    const idx=order[oi%order.length];
+    if(diff>0){ units[idx]+=1; diff--; }
+    else if(units[idx]>1){ units[idx]-=1; diff++; }
+    oi++;
+    if(oi>10000) break;   /* 安全弁: 万一収束しない場合に無限ループを防ぐ */
+  }
+  const alloc={}; combos.forEach((c,i)=>{ alloc[c]=units[i]*unit; });
+  return alloc;
+}
 function makeComboNote(){
   const c=window.__combo;
   if(!c){ document.getElementById("cnMsg").textContent="先に総合判定をしてください"; return; }
   const venue=document.getElementById("cnVenue").value.trim()||"—";
   const rno=document.getElementById("cnRno").value||"—";
   const tm=document.getElementById("cnTime").value.trim();
-  const unit=Math.max(100,Math.round((+document.getElementById("cnUnit").value||100)/100)*100);
+  const total=Math.max(100,Math.round((+document.getElementById("cnTotal").value||3000)/100)*100);
+  const alloc = c.combos.length? allocateProportional(c.combos, c.triMap||{}, total, 100) : {};
+  const allocSum = arr=>arr.reduce((a,x)=>a+(alloc[x]||0),0);
   const d=new Date(); const ds=`${d.getFullYear()}年${d.getMonth()+1}月${d.getDate()}日`;
   const nm=i=>{ const rd=(typeof fanLookup==="function")?fanLookup(i+1):null; const cls=(document.getElementById("cls"+(i+1))||{}).value||""; const n=rd&&rd[0]?rd[0]:""; return n?(cls?`${n}(${cls})`:n):cls; };
   const ord=[0,1,2,3,4,5].sort((a,b)=>c.p1[b]-c.p1[a]);
@@ -2851,13 +2874,13 @@ function makeComboNote(){
   if(!c.combos.length){
     t+=`\n■ 結論\nこのレースは除外の結果、買い目が残らなかったため見送りとします。\n`;
   }else{
-    t+=`\n買い目は3連単${c.combos.length}点(1点${unit}円で合計${(c.combos.length*unit).toLocaleString()}円)です。\n`;
+    t+=`\n買い目は3連単${c.combos.length}点、確率に応じて100円単位で配分し、合計${allocSum(c.combos).toLocaleString()}円です。\n`;
   }
   t+=`\n───── ここから有料 ─────\n\n`;
   if(c.combos.length){
-    t+=`■ 買い目(3連単・${c.combos.length}点)\n`;
-    c.combos.forEach(x=>{ t+=`${x}　${unit}円\n`; });
-    t+=`合計 ${(c.combos.length*unit).toLocaleString()}円\n`;
+    t+=`■ 買い目(3連単・${c.combos.length}点、確率比例配分)\n`;
+    [...c.combos].sort((a,b)=>(alloc[b]||0)-(alloc[a]||0)).forEach(x=>{ t+=`${x}　${(alloc[x]||0).toLocaleString()}円\n`; });
+    t+=`合計 ${allocSum(c.combos).toLocaleString()}円\n`;
     const fmt=arr=>arr.map(i=>i+1).join("");
     t+=`(フォーメーション表記: ${fmt(c.A)}-${fmt(c.B)}-${fmt(c.C)})\n`;
   }else{
@@ -2867,8 +2890,9 @@ function makeComboNote(){
     const f=c.form45;
     t+=`\n■ 参考: ④→⑤の形の買い目(3連単・${f.list.length}点)\n`;
     t+=`4コースの${f.head}号艇を1着、5コースの${f.partner}号艇を2・3着に固定し、1マーク先取り予想で下位の${f.cut.join("・")}号艇を外した形です。\n`;
-    f.list.forEach(x=>{ t+=`${x}　${unit}円\n`; });
-    t+=`合計 ${(f.list.length*unit).toLocaleString()}円\n`;
+    const allocF = allocateProportional(f.list, c.triMap||{}, total, 100);
+    [...f.list].sort((a,b)=>(allocF[b]||0)-(allocF[a]||0)).forEach(x=>{ t+=`${x}　${(allocF[x]||0).toLocaleString()}円\n`; });
+    t+=`合計 ${f.list.reduce((a,x)=>a+(allocF[x]||0),0).toLocaleString()}円\n`;
   }
   t+=`\n■ 根拠\n`;
   if(c.ohOk) t+=`・票の動き: 直前に票が伸びた${c.best}号艇を2・3着候補に追加し、票が離れた${c.worst}号艇を候補から外しています。\n`;
