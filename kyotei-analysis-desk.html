@@ -223,6 +223,7 @@ footer{margin-top:28px;font-size:12px;color:var(--faint);border-top:1px solid va
         <option value="pool">プール220%(標準)</option>
         <option value="poolExclTop">プール220%(着率トップ除外・再配分)</option>
         <option value="cum">累積60-70-80</option>
+        <option value="top1">1点予想(モデル最有力の1点)</option>
       </select>
       <button onclick="makeNote()">note用の記事を作る</button>
       <button onclick="document.getElementById('paste3').value='';document.getElementById('recoOut').innerHTML='';document.getElementById('fileName').textContent='B******.TXT を選択、または下に貼り付け';">クリア</button>
@@ -384,6 +385,14 @@ footer{margin-top:28px;font-size:12px;color:var(--faint);border-top:1px solid va
       <select id="ohPickMode" class="s" onchange="updateOhPickModeUI()">
         <option value="delta">得票シェア変化が大きい順</option>
         <option value="excludeWorst" selected>下位艇除外方式(人気上位×下位艇カット)</option>
+        <option value="single">1点予想</option>
+      </select>
+    </div>
+    <div class="row" id="ohSingleParams" style="display:none;margin-top:6px;gap:8px;flex-wrap:wrap;align-items:center">
+      <label style="font-size:12px">1点の選び方</label>
+      <select id="ohSingleRule" class="s">
+        <option value="delta" selected>得票シェアが一番増えた組番</option>
+        <option value="exclTop">下位艇(絡み合計)を除外した後の最人気の組番</option>
       </select>
     </div>
     <div class="row" id="ohDeltaParams" style="display:none;margin-top:6px;gap:8px;flex-wrap:wrap;align-items:center">
@@ -1099,7 +1108,7 @@ function noteList(){
   const mode=document.getElementById("recoMode").value;
   let list=PROG.map(x=>{
     const ev=evalRace(x);
-    const pts=getFormationByMethod(ev.pos,currentFormMethod()).list.length;
+    const pts=getFormationByMethod(ev.pos,currentFormMethod()==="top1"?"pool":currentFormMethod(),ev).list.length;
     return {...x,ev,pts};
   });
   if(mode==="strong") list=list.filter(x=>x.ev.top1&&x.ev.a1);
@@ -1150,7 +1159,12 @@ function poolFormation(pos,budget){
   Aa.forEach(a=>Bb.forEach(b=>Cc.forEach(c=>{ if(a!==b&&b!==c&&a!==c) list.push(`${a+1}-${b+1}-${c+1}`); })));
   return {A:Aa,B:Bb,C:Cc,list:[...new Set(list)]};
 }
-function getFormationByMethod(pos,methodId){
+function getFormationByMethod(pos,methodId,ev){
+  if(methodId==="top1" && ev){
+    /* 1点予想: プール220%の候補の中でモデルの同時確率が最も高い1点(ガチガチの1点と同じ選び方) */
+    const c=gachiTopCombo(ev); const [a,b,d]=c.split("-").map(n=>+n-1);
+    return {A:[a],B:[b],C:[d],list:[c]};
+  }
   if(methodId==="poolExclTop") return poolFormationExcludeTop(pos,2.2);
   if(methodId==="cum") return cumFormation(pos,0.60,0.70,0.80);
   return poolFormation(pos,2.2);
@@ -1224,10 +1238,10 @@ function makeNote(){
   const chipTxt=i=>String(i+1);
   const joinNum=arr=>arr.map(chipTxt).join("");     /* 確率が高い順のまま連結(ソートしない) */
   const formMethod=currentFormMethod();
-  const formMethodLabel={pool:"プール220%",poolExclTop:"プール220%・着率トップ除外",cum:"累積60-70-80"}[formMethod]||"プール220%";
+  const formMethodLabel={pool:"プール220%",poolExclTop:"プール220%・着率トップ除外",cum:"累積60-70-80",top1:"1点予想(モデル最有力)"}[formMethod]||"プール220%";
   const mode0b=document.getElementById("recoMode").value;
   const cumTxt=x=>{
-    const f=getFormationByMethod(x.ev.pos,formMethod);
+    const f=getFormationByMethod(x.ev.pos,formMethod,x.ev);
     if(mode0b==="gachi"){
       /* ガチガチモードは、抽出時と同じプール220%の候補から最も的中確率が高い1点だけを買い目にする */
       return `${gachiTopCombo(x.ev)}（1点）`;
@@ -1261,6 +1275,7 @@ function makeNote(){
   setMsg("msg3",`${list.length}件を書き出しました`,true);
   window.__lastNoteList=list;   /* 結果検証記事で使う */
   window.__lastNoteMode=mode0b;  /* 検証は、記事を作ったときの買い方で行う */
+  window.__lastNoteMethod=formMethod;
   window.__lastNoteMode=document.getElementById("recoMode").value;
 }
 let KRESULT=[];   /* [{v(場コード), r(R), combo, amount}] */
@@ -1306,8 +1321,8 @@ function verifyResults(){
     return;
   }
   /* 判定基準は、番組表タブで選んでいる買い方(既定:プール220%)の的中で統一する */
-  const vFormMethod=currentFormMethod();
-  const vFormMethodLabel={pool:"プール220%",poolExclTop:"プール220%・着率トップ除外",cum:"累積60-70-80"}[vFormMethod]||"プール220%";
+  const vFormMethod=window.__lastNoteMethod||currentFormMethod();
+  const vFormMethodLabel={pool:"プール220%",poolExclTop:"プール220%・着率トップ除外",cum:"累積60-70-80",top1:"1点予想(モデル最有力)"}[vFormMethod]||"プール220%";
   const isGachi=window.__lastNoteMode==="gachi";
   const rows=list.map(x=>{
     const kr=KRESULT.find(k=>k.v===x.v && k.r===x.r);
@@ -1318,7 +1333,7 @@ function verifyResults(){
       const hit=top===kr.combo;
       return {x,kr,hit,desc:`${top}(1点)`,pts:1,cost:100,ret:hit?kr.amount:0};
     }
-    const f=getFormationByMethod(x.ev.pos,vFormMethod);
+    const f=getFormationByMethod(x.ev.pos,vFormMethod,x.ev);
     const hit=f.list.includes(kr.combo);
     const joinNum2=arr=>arr.map(i=>i+1).join("");   /* 確率が高い順のまま連結(ソートしない) */
     const desc=`${joinNum2(f.A)}-${joinNum2(f.B)}-${joinNum2(f.C)}(${f.list.length}点)`;
@@ -1331,7 +1346,8 @@ function verifyResults(){
   const invTotal=matched.reduce((a,r)=>a+r.cost,0);
   const retTotal=matched.reduce((a,r)=>a+r.ret,0);
   const roi=invTotal?(retTotal/invTotal*100):0;
-  let h='<table><thead><tr><th>場</th><th class="num">R</th><th>'+(isGachi?'買い目(1点)':'フォーメーション')+'</th>'
+  const isSingle=isGachi||vFormMethod==="top1";
+  let h='<table><thead><tr><th>場</th><th class="num">R</th><th>'+(isSingle?'買い目(1点)':'フォーメーション')+'</th>'
    +'<th class="num">結果(3連単)</th><th class="num">払戻</th><th>判定</th></tr></thead><tbody>';
   matched.forEach(({x,kr,hit,desc})=>{
     h+=`<tr><td style="font-size:12px">${VENMAP[x.v]||x.v}</td><td class="num">${x.r}R</td>
@@ -1342,10 +1358,11 @@ function verifyResults(){
   });
   h+="</tbody></table>";
   document.getElementById("verifyOut").innerHTML=h
-    +`<p class="hint" style="margin-top:8px">${isGachi?"ガチガチ(最有力1点)":"フォーメーション"}で書き出した ${matched.length}/${list.length} 件のうち、的中は ${hitN} 件(${matched.length?(hitN/matched.length*100).toFixed(1):"0"}%)。`
+    +`<p class="hint" style="margin-top:8px">${isGachi?"ガチガチ(最有力1点)":(vFormMethod==="top1"?"1点予想(モデル最有力)":"フォーメーション")}で書き出した ${matched.length}/${list.length} 件のうち、的中は ${hitN} 件(${matched.length?(hitN/matched.length*100).toFixed(1):"0"}%)。`
     +`投資${invTotal.toLocaleString()}円 → 払戻${retTotal.toLocaleString()}円(回収率${roi.toFixed(1)}%)。</p>`;
   window.__verifyRows=matched;
   window.__verifyGachi=isGachi;
+  window.__verifyTop1=(vFormMethod==="top1");
   setMsg2("verifyMsg",`${matched.length}件を照合しました`,true);
 }
 function setMsg2(id,txt,ok){const e=document.getElementById(id);e.textContent=txt;e.style.color=ok?"var(--pos)":"var(--neg)";}
@@ -1356,9 +1373,9 @@ function makeVerifyNote(){
   const invTotal=rows.reduce((a,r)=>a+r.cost,0);
   const retTotal=rows.reduce((a,r)=>a+r.ret,0);
   const roi=invTotal?(retTotal/invTotal*100):0;
-  const vFormMethodLabel={pool:"プール220%",poolExclTop:"プール220%・着率トップ除外",cum:"累積60-70-80"}[currentFormMethod()]||"プール220%";
+  const vFormMethodLabel={pool:"プール220%",poolExclTop:"プール220%・着率トップ除外",cum:"累積60-70-80",top1:"1点予想(モデル最有力)"}[window.__lastNoteMethod||currentFormMethod()]||"プール220%";
   const g=!!window.__verifyGachi;
-  const head=`${fmtJDate(window.__kDate||window.__progDate)}の答え合わせ — ${g?"ガチガチレースの1点予想":"フォーメーション"}は当たったか`;
+  const head=`${fmtJDate(window.__kDate||window.__progDate)}の答え合わせ — ${g?"ガチガチレースの1点予想":(window.__verifyTop1?"1点予想":"フォーメーション")}は当たったか`;
   let t=`【${head}】\n\n`
    +`照合レース数 ${rows.length}件 / 的中 ${hitN}件(${(hitN/rows.length*100).toFixed(1)}%) / `
    +`投資${invTotal.toLocaleString()}円 → 払戻${retTotal.toLocaleString()}円(回収率${roi.toFixed(1)}%)\n\n`;
@@ -1578,7 +1595,7 @@ function renderReco(){
   document.getElementById("customBox").style.display=mode==="custom"?"":"none";
   let list=PROG.map(x=>{
     const ev=evalRace(x);const pat=classifyPattern(ev);
-    const pts=getFormationByMethod(ev.pos,currentFormMethod()).list.length;
+    const pts=getFormationByMethod(ev.pos,currentFormMethod()==="top1"?"pool":currentFormMethod(),ev).list.length;
     return {...x,ev,pat,roi:PATTERN_ROI[pat],pts};
   });
   const vset=progVenueSet();
@@ -1847,7 +1864,12 @@ function updateOhPickModeUI(){
   const mode=document.getElementById("ohPickMode").value;
   document.getElementById("ohDeltaParams").style.display=(mode==="delta")?"":"none";
   document.getElementById("ohExclParams").style.display=(mode==="excludeWorst")?"":"none";
+  document.getElementById("ohSingleParams").style.display=(mode==="single")?"":"none";
   const hint=document.getElementById("ohPickHint");
+  if(mode==="single"){
+    hint.textContent="1点だけ選びます。蓄積データ506レースでの検証: 得票シェアが一番増えた組番は的中8.3%・回収率78.4%、下位艇除外後の最人気は的中8.9%・回収率62.8%。どちらも100%を下回っており、日ごとの振れも大きい参考情報です。";
+    return;
+  }
   hint.textContent=(mode==="delta")
     ?"得票シェアの変化が大きい順に、①変化ポイントが下限を下回る、または②次を加えると合成オッズが下限を下回る、のいずれかに達するまで選びます。"
     :"直近の得票シェアが最も下がった艇(下位)が絡む組み合わせを除外したうえで、残りの中から現在の人気(得票シェア)が高い順に指定点数を選びます。";
@@ -1856,7 +1878,30 @@ function pickByOddsChange(){
   const mode=document.getElementById("ohPickMode").value;
   OHPICK_MODE=mode;
   if(mode==="excludeWorst") pickByExcludeWorst();
+  else if(mode==="single") pickSingle();
   else pickByDelta();
+}
+let OHPICK_SINGLE_RULE="delta";
+function pickSingle(){
+  if(!OHDATA.length){setMsg("msgOhPick","先に「票の動きを解析」を実行してください",false);return;}
+  const rule=document.getElementById("ohSingleRule").value;
+  OHPICK_SINGLE_RULE=rule;
+  let pick=null, worst=null;
+  if(rule==="delta"){
+    pick=[...OHDATA].sort((a,b)=>(b.shareDelta||0)-(a.shareDelta||0))[0];
+  }else{
+    /* 絡み合計(1+2+3着)の得票シェアが一番下がった艇を除外し、残りで現在の人気が最も高い組番 */
+    const d={}; for(let i=1;i<=6;i++) d[i]=0;
+    OHDATA.forEach(r=>r.c.split("-").map(Number).forEach(l=>{ d[l]+=(r.shareNow||0)-(r.shareOld||0); }));
+    worst=+Object.keys(d).sort((a,b)=>d[a]-d[b])[0];
+    pick=OHDATA.filter(r=>!r.c.split("-").map(Number).includes(worst)).sort((a,b)=>(b.shareNow||0)-(a.shareNow||0))[0];
+  }
+  if(!pick){ document.getElementById("ohPickOut").innerHTML=""; setMsg("msgOhPick","該当する組み合わせがありませんでした",false); return; }
+  OHPICK=[pick];
+  OHPICK_EXCL=[];
+  renderOhPickTable(OHPICK,ohNow(pick),false);
+  setMsg("msgOhPick",`1点(${pick.c}・${ohNow(pick).toFixed(1)}倍)を選出しました`+(worst?`(除外: ${worst}号艇)`:""),true);
+  window.__ohSingleWorst=worst;
 }
 function pickByDelta(){
   if(!OHDATA.length){setMsg("msgOhPick","先に「票の動きを解析」を実行してください",false);return;}
@@ -1966,7 +2011,11 @@ function makeOhNote(){
   const syn=1/invSum;
   const oldLabel=(typeof OHHeaders!=="undefined"&&OHHeaders.length)?OHHeaders[OHHeaders.findIndex(lb=>/20分/.test(lb))>=0?OHHeaders.findIndex(lb=>/20分/.test(lb)):OHHeaders.length-1]:"";
   let t=`【${venue}${rno?rno+"R":""} オッズの動きから見た買い目】\n\n`;
-  if(OHPICK_MODE==="excludeWorst"){
+  if(OHPICK_MODE==="single"){
+    t+=OHPICK_SINGLE_RULE==="delta"
+      ?`締切20分前から直前までに、得票シェアが一番増えた組番を1点選びました(${ohNow(OHPICK[0]).toFixed(1)}倍)。\n\n`
+      :`直近の絡み合計シェア(1+2+3着)が一番下がった${window.__ohSingleWorst}号艇を除外し、残りで一番人気の組番を1点選びました(${ohNow(OHPICK[0]).toFixed(1)}倍)。\n\n`;
+  }else if(OHPICK_MODE==="excludeWorst"){
     const exclTxt=OHPICK_EXCL.length?OHPICK_EXCL.join("・")+"号艇":"";
     const basisLabel=OHPICK_EXCL_BASIS==="total"?"絡み合計シェア(1+2+3着)":"1着シェア";
     t+=`直近の${basisLabel}が下がった${exclTxt}が絡む組み合わせを除外し、残りを現在の人気(得票シェア)が高い順に${OHPICK.length}点選びました(合成${syn.toFixed(2)}倍)。\n\n`;
@@ -1987,13 +2036,15 @@ function makeOhNote(){
   const srcTxt=ohUseOff()?`最新オッズは公式サイトの締切直前の数字、比較の基準は${oldLabel}(ボートレース日和)です。`
                           :`最新オッズ・比較の基準ともボートレース日和の数字です。`;
   let verTxt;
-  if(condA){
-    verTxt=ohUseOff()?`同じ条件を蓄積データ198レース(3日間・16会場)で検証した結果は回収率95.5%でしたが、件数が少なく確定的なものではありません。`
-                      :`同じ条件の検証(198レース)では、最新が直前オッズなら回収率95.5%、5分前だと85.3%、10分前だと70.1%と、最新の時点で結果が大きく変わりました。`;
+  if(OHPICK_MODE==="single"){
+    verTxt=OHPICK_SINGLE_RULE==="delta"
+      ?`同じ選び方を蓄積データ506レース(5日間)で検証した結果は、的中8.3%・回収率78.4%でした。日によって59〜109%と振れが大きく、長く続けてプラスになる裏付けはありません。`
+      :`同じ選び方を蓄積データ506レース(5日間)で検証した結果は、的中8.9%・回収率62.8%でした。長く続けてプラスになる裏付けはありません。`;
+  }else if(condA){
+    verTxt=`同じ条件(絡み合計・下位1艇除外・12点・合成2.0倍)を蓄積データ506レース(5日間)で検証した結果は回収率77.4%でした。最初の198レースでは95.5%でしたが、件数が増えるにつれて下がっています。`;
   }else if(condB){
-    verTxt=`同じ条件(1着シェア基準・下位1艇除外・24点・合成2.5倍)を蓄積データ198レースで検証した結果は回収率112.4%(的中69件)でしたが、`
-          +`合成オッズ・点数の組み合わせを何通りも試した中で最も良かった設定であり、他の近い設定(合成2.0〜3.0倍・点数12〜24点)でも99〜110%程度と近い数字が出ています。`
-          +`件数がまだ少なく、この数字を保証するものではありません。`;
+    verTxt=`同じ条件(1着シェア基準・下位1艇除外・24点・合成2.5倍)を蓄積データ506レース(5日間)で検証した結果は回収率87.8%でした。`
+          +`最初の198レースでは112.4%でしたが、これは設定を何通りも試した中で最も良かったもので、件数が増えるにつれて下がっています。`;
   }else{
     verTxt=`この条件が的中率や回収率につながるかは検証していません。`;
   }
@@ -2605,10 +2656,27 @@ function checkFormAlert(crs,behind){
     window.__lastAlertKey=null;
   }
 }
+/* 先行艇を1着に固定し、出走表のみのモデル(PROGM・検証に使ったものと同じ)で確率が高い3連単4点を選ぶ */
+function leadTop4(headLane){
+  if(typeof evalRace!=="function"||typeof tripleProbOf!=="function") return [];
+  const gvv=id=>{const e=document.getElementById(id); const v=e?parseFloat(e.value):NaN; return isNaN(v)?null:v;};
+  const e=[1,2,3,4,5,6].map(i=>({nat:gvv("nat"+i),loc:gvv("loc"+i),motor:gvv("mot"+i),boat:gvv("bot"+i),
+    grade:(document.getElementById("cls"+i)||{}).value||""}));
+  const ev=evalRace({e});
+  if(!ev||!ev.strength) return [];
+  const list=[];
+  for(let j=1;j<=6;j++) for(let m=1;m<=6;m++){
+    if(j===headLane||m===headLane||j===m) continue;
+    const c=`${headLane}-${j}-${m}`; list.push({c,pr:tripleProbOf(ev.strength,c)});
+  }
+  return list.sort((a,b)=>b.pr-a.pr).slice(0,4).map(x=>x.c);
+}
 function checkLeadAlert(crs,behind){
   /* 「先行艇×捲り率」の形: 1コース以外のいずれかの艇が、1マークで他の5艇全員より2m以上前に出ており、
-     かつその艇の登録選手が該当コースでの捲り率10%以上(走数10以上)の場合に通知する。
-     蓄積データでの検証(2〜5コース・〜2026/9/21): 単勝回収率約121%(探索120.3%・検証122.4%、348レース)。
+     かつその艇の登録選手が該当コースでの捲り率5%以上(走数10以上)の場合に通知する。
+     蓄積データでの検証(2〜5コース・〜2026/9/23): 単勝回収率約119%(探索120.2%・検証117.3%、802レース)。
+     3連単(先行艇1着固定・PROGM確率上位4点・1点100円): 回収率116.2%(探索123.9%・検証104.3%、719レース)。
+     ※3連単は14通りの買い方を試した中で良かったもの。単勝より不確か。
      6コースの先行艇は45レースで53.6%と弱いため対象外。ただし6コース除外は結果を見てから決めた条件なので、今後のデータで確認が必要。 */
   const el=document.getElementById("leadAlert");
   if(!el)return;
@@ -2629,19 +2697,23 @@ function checkLeadAlert(crs,behind){
     const rec=(KIMFULL2[tb]||{})[c];
     if(!rec || rec[0]<10) continue;
     const makuri=rec[2];
-    if(makuri<0.10) continue;
+    if(makuri<0.05) continue;
     if(!best || lead>best.lead) best={lane,c,lead,makuri,tb};
   }
   if(best){
+    const top4=leadTop4(best.lane);
+    window.__leadTop4={lane:best.lane,list:top4};
     el.style.display="";
     el.innerHTML=`<b>🔔 検証済みの形に該当</b> — ${best.c}コース(${best.lane}号艇)が1マークで他艇より${best.lead.toFixed(1)}m前に出ており、`
-      +`このコースでの捲り率が${(best.makuri*100).toFixed(1)}%(10%以上)あります。`
-      +`単勝で狙える状況です(蓄積データでの検証: 2〜5コースの先行艇で単勝回収率約121%・348レース)。`;
+      +`このコースでの捲り率が${(best.makuri*100).toFixed(1)}%(5%以上)あります。`
+      +`単勝で狙える状況です(蓄積データでの検証: 2〜5コースの先行艇で単勝回収率約119%・802レース)。`
+      +(top4.length?`<br>3連単なら ${best.lane}号艇1着固定・モデル確率上位4点: <b>${top4.join(" / ")}</b>`
+        +`(検証: 回収率116.2%・719レース。単勝より不確か)`:"");
     if(document.getElementById("notifyToggle")&&document.getElementById("notifyToggle").checked
        && window.__lastLeadAlertKey!==JSON.stringify(crs)){
       window.__lastLeadAlertKey=JSON.stringify(crs);
       if("Notification" in window && Notification.permission==="granted"){
-        new Notification("先行艇×捲り率の形に該当",{body:`${best.c}コース(${best.lane}号艇)が${best.lead.toFixed(1)}m前・捲り率${(best.makuri*100).toFixed(1)}%。単勝回収率実績約121%(348レース)の形です。`});
+        new Notification("先行艇×捲り率の形に該当",{body:`${best.c}コース(${best.lane}号艇)が${best.lead.toFixed(1)}m前・捲り率${(best.makuri*100).toFixed(1)}%。単勝回収率実績約119%(802レース)の形です。`});
       }
       try{
         const ctx=new (window.AudioContext||window.webkitAudioContext)();
@@ -2654,6 +2726,7 @@ function checkLeadAlert(crs,behind){
   }else{
     el.style.display="none";
     window.__lastLeadAlertKey=null;
+    window.__leadTop4=null;
   }
 }
 
@@ -2807,7 +2880,8 @@ function runComboJudge(){
     form: formHit? plain(formHit):"", lead: leadHit? plain(leadHit):"",
     crs:[1,2,3,4,5,6].map(i=>+document.getElementById("crs"+i).value),
     triMap: (function(){ const m={}; (curTri||[]).forEach(t=>{ m[t.c]=t.pr; }); return m; })(),
-    boost: (chokuOk && window.__boost)? window.__boost.list.slice() : []
+    boost: (chokuOk && window.__boost)? window.__boost.list.slice() : [],
+    leadTop4: (leadHit && window.__leadTop4)? window.__leadTop4 : null
   };
   window.__combo.form45=null;
   if(formHit){
@@ -2939,6 +3013,12 @@ function makeComboNote(){
     [...f.list].sort((a,b)=>(allocF[b]||0)-(allocF[a]||0)).forEach(x=>{ t+=`${x}　${(allocF[x]||0).toLocaleString()}円\n`; });
     t+=`合計 ${f.list.reduce((a,x)=>a+(allocF[x]||0),0).toLocaleString()}円\n`;
   }
+  if(c.leadTop4 && c.leadTop4.list.length){
+    const L=c.leadTop4;
+    t+=`\n■ 参考: 先行艇×捲り率の3連単(${L.lane}号艇1着固定・モデル確率上位${L.list.length}点)\n`;
+    L.list.forEach(x=>{ t+=`${x}　100円\n`; });
+    t+=`合計 ${(L.list.length*100).toLocaleString()}円(検証は1点100円の均等買いで行っています)\n`;
+  }
   t+=`\n■ 根拠\n`;
   if(c.ohOk) t+=`・票の動き: 直前に票が伸びた${c.best}号艇を2・3着候補に追加し、票が離れた${c.worst}号艇を候補から外しています。\n`;
   const fm=(c.form||"").match(/内勢より(-?\d+\.\d)m/);
@@ -2961,7 +3041,7 @@ function makeComboNote(){
   t+=`・プール220%(出走表のみ): 18,873レースで回収率79.3%\n`;
   if(c.ohOk) t+=`・票の動きによる追加・除外: 339レースで回収率約92〜95%(件数が少なく、今後変動する可能性があります)\n`;
   if(c.form) t+=`・④→⑤の形: 8,790レースで回収率約89%(ただし直近2026年8〜9月は65.7%と低調)\n`;
-  if(c.lead) t+=`・先行艇×捲り率: 2〜5コースの先行艇348レースで単勝回収率約121%(探索120.3%・検証122.4%)。6コースの先行艇は実績が弱いため対象外にしています\n`;
+  if(c.lead) t+=`・先行艇×捲り率(2〜5コース・捲り率5%以上): 単勝で802レース・回収率約119%(探索120.2%・検証117.3%)。3連単のモデル確率上位4点は719レース・回収率116.2%(探索123.9%・検証104.3%。14通りの買い方を試した中で良かったもので、単勝より不確かです)。6コースの先行艇は実績が弱いため対象外にしています\n`;
   if((c.boost||[]).length) t+=`・跳ね上がり条件: 蓄積約3.9万レースでの1着率の実績(回収率ではなく、1着になりやすさの指標です)\n`;
   t+=`\n※上記は過去データでの検証結果であり、今後の的中や利益を保証するものではありません。舟券の購入はご自身の判断と責任で、無理のない範囲でお楽しみください。\n`;
   t+=`※本予想は個人の分析によるもので、BOATRACE振興会・各施行者とは関係ありません。\n`;
