@@ -1111,6 +1111,9 @@ function noteList(){
     const pts=getFormationByMethod(ev.pos,currentFormMethod()==="top1"?"pool":currentFormMethod(),ev).list.length;
     return {...x,ev,pts};
   });
+  /* 画面の一覧と同じく、選んだ会場だけに絞る(記事・結果検証が一覧と一致するように) */
+  const vset=progVenueSet();
+  if(vset) list=list.filter(x=>vset.has(x.v));
   if(mode==="strong") list=list.filter(x=>x.ev.top1&&x.ev.a1);
   else if(mode==="kado") list=list.filter(x=>x.ev.kadoStrong);
   else if(mode==="aare") list=list.filter(x=>x.ev.weak1);
