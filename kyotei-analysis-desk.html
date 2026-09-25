@@ -1220,6 +1220,17 @@ function gachiTopCombo(ev){
   f.list.forEach(c=>{ const pr=ev.strength?tripleProbOf(ev.strength,c):0; if(pr>topPr){topPr=pr; top=c;} });
   return top;
 }
+/* note用のハッシュタグ: 基本4つ + 会場 + 記事ごとの追加タグを、重複なしで最大10個 */
+function noteHashtags(venues,extras){
+  const base=["競艇","ボートレース","競艇予想","ボートレース予想"];
+  const vs=(venues||[]).filter(v=>v&&v!=="—");
+  const cnt={}; vs.forEach(v=>cnt[v]=(cnt[v]||0)+1);
+  const top=Object.keys(cnt).sort((a,b)=>cnt[b]-cnt[a]).slice(0,3);
+  const vt=top.length===1?[`ボートレース${top[0]}`,`${top[0]}競艇`]:top.map(v=>`ボートレース${v}`);
+  const all=[...base,...vt,...(extras||[])];
+  const uniq=[...new Set(all)].slice(0,10);
+  return `\n\n---\nハッシュタグ(noteの公開設定に入力):\n`+uniq.map(x=>"#"+x).join(" ")+`\n`;
+}
 function makeNote(){
   if(!PROG.length){setMsg("msg3","先に番組表を評価してください",false);return;}
   document.getElementById("noteBox").style.display="";
@@ -1271,6 +1282,11 @@ function makeNote(){
    +`\n※フォーメーションは、1〜3着の確率をまとめて1つの集団にし、確率が高い順に合計220%に達するまで選ぶ方式です。`
    +`同条件・出走表のみでの検証(17,732レース)では平均7.0点・的中率35.4%・回収率79.5%でした。`
    +`\n※当たることを保証するものではありません。`;
+  {
+    const ex={strong:["イン逃げ","本命"],kado:["カド","まくり"],aare:["穴予想","万舟"],gachi:["本命","1点勝負"]}[mode0b]||[];
+    const ex2=formMethod==="top1"?["1点勝負"]:[];
+    t+=noteHashtags(list.map(x=>VENMAP[x.v]),[...ex,...ex2,"3連単","データ分析"]);
+  }
   document.getElementById("noteOut").value=t;
   setMsg("msg3",`${list.length}件を書き出しました`,true);
   window.__lastNoteList=list;   /* 結果検証記事で使う */
@@ -1386,6 +1402,7 @@ function makeVerifyNote(){
   });
   t+=`---\n※${g?"買い目(各レース最有力の1点・100円)":"フォーメーション"}は公開データ約4.7万レースで学習・較正したモデルによるものです(進入は枠なり想定)。\n`
    +`※この記事は事前の推定と結果を突き合わせた記録で、特定の賭け方を推奨するものではありません。`;
+  t+=noteHashtags(rows.map(r=>VENMAP[r.x.v]),["結果検証","答え合わせ","回収率",...((g||window.__verifyTop1)?["1点勝負"]:[]),"データ分析"]);
   const box=document.getElementById("verifyNoteOut");
   box.style.display=""; box.value=t;
   setMsg2("verifyMsg","検証記事を作成しました",true);
@@ -2051,6 +2068,7 @@ function makeOhNote(){
   t+=`\n合成オッズ ${syn.toFixed(2)}倍\n`
    +`\n---\n※${srcTxt}\n※得票シェアは、各時点のオッズの逆数を全組み合わせで正規化した推定値です。`
    +verTxt+`市場の動きを読み取る参考情報です。`;
+  t+=noteHashtags([venue],["オッズ","オッズ分析","3連単",...(OHPICK_MODE==="single"?["1点勝負"]:[]),"データ分析"]);
   const box=document.getElementById("ohNoteOut");
   box.style.display=""; box.value=t;
   setMsg("msgOhPick","記事用テキストを作成しました",true);
@@ -3046,6 +3064,7 @@ function makeComboNote(){
   t+=`\n※上記は過去データでの検証結果であり、今後の的中や利益を保証するものではありません。舟券の購入はご自身の判断と責任で、無理のない範囲でお楽しみください。\n`;
   t+=`※本予想は個人の分析によるもので、BOATRACE振興会・各施行者とは関係ありません。\n`;
   t+=`※20歳未満の方は舟券を購入できません。\n`;
+  t+=noteHashtags([venue],["有料予想","3連単",...(c.lead?["まくり"]:[]),...(c.form?["カド"]:[]),"データ分析"]);
   document.getElementById("cnOut").value=t;
   document.getElementById("cnMsg").textContent="作成しました";
 }
