@@ -931,6 +931,7 @@ function extractConditions(t){
 }
 
 function parseSyussou(){
+  window.__scratched=[];   /* 新しいレースを読み込んだら、前のレースの欠場情報は消す */
   const t=norm(document.getElementById("paste0").value);
   /* 平均STや勝率が「-」の選手(B2級・新人など)にも対応する */
   const ST="(?:0\\.\\d{2}|-|―)";
@@ -1795,8 +1796,9 @@ function loadOhOfficial(){
   const t=norm(document.getElementById("paste5b").value);
   const map=parseOfficialOddsText(t);
   const n=Object.keys(map).length;
-  if(n<100){
-    setMsg("msg5b",`公式オッズを${n}点しか読み取れませんでした。公式サイトの3連単オッズページを全選択コピーして貼り付けてください(120点必要です)`,false);
+  const kOff=boatsInCombos(Object.keys(map)).length;
+  if(kOff<4||n<combosNeeded(kOff)){
+    setMsg("msg5b",`公式オッズを${n}点しか読み取れませんでした。公式サイトの3連単オッズページを全選択コピーして貼り付けてください(欠場が無ければ120点、1艇欠場なら60点です)`,false);
     return;
   }
   OHOFF=map;
@@ -1817,7 +1819,7 @@ function clearOhOfficial(){
   setMsg("msg5b","公式オッズをクリアしました(最新はボートレース日和の列を使います)",true);
   if(OHDATA.length){ renderOddsHistory(); if(OHPICK.length) pickByOddsChange(); }
 }
-function ohUseOff(){ return Object.keys(OHOFF).length>=100; }
+function ohUseOff(){ return Object.keys(OHOFF).length>0; }
 /* 「最新」のオッズ。公式の直前オッズがあればそれを、なければボートレース日和の最新列を返す */
 function ohNow(r){ return (ohUseOff()&&OHOFF[r.c]>0)?OHOFF[r.c]:r.odds[0]; }
 function renderOddsHistory(){
@@ -1928,7 +1930,8 @@ function pickSingle(){
     /* 絡み合計(1+2+3着)の得票シェアが一番下がった艇を除外し、残りで現在の人気が最も高い組番 */
     const d={}; for(let i=1;i<=6;i++) d[i]=0;
     OHDATA.forEach(r=>r.c.split("-").map(Number).forEach(l=>{ d[l]+=(r.shareNow||0)-(r.shareOld||0); }));
-    worst=+Object.keys(d).sort((a,b)=>d[a]-d[b])[0];
+    const present=boatsInCombos(OHDATA.map(r=>r.c));
+    worst=+Object.keys(d).filter(l=>present.includes(+l)).sort((a,b)=>d[a]-d[b])[0];
     pick=OHDATA.filter(r=>!r.c.split("-").map(Number).includes(worst)).sort((a,b)=>(b.shareNow||0)-(a.shareNow||0))[0];
   }
   if(!pick){ document.getElementById("ohPickOut").innerHTML=""; setMsg("msgOhPick","該当する組み合わせがありませんでした",false); return; }
@@ -1985,7 +1988,8 @@ function pickByExcludeWorst(){
       laneOld[first]+=r.shareOld||0;
     }
   });
-  const laneDelta=[1,2,3,4,5,6].map(i=>({lane:i,delta:(laneNow[i]-laneOld[i])}));
+  const present=boatsInCombos(OHDATA.map(r=>r.c));   /* 欠場艇(オッズに無い艇)は除外艇の候補にしない */
+  const laneDelta=present.map(i=>({lane:i,delta:(laneNow[i]-laneOld[i])}));
   laneDelta.sort((a,b)=>a.delta-b.delta);   /* 下がった順(昇順) */
   const excludeLanes=new Set(laneDelta.slice(0,nExcl).map(x=>x.lane));
   OHPICK_EXCL=[...excludeLanes];
@@ -2137,6 +2141,19 @@ function parseOriginal(){
   setMsg("msg4",`${got.length}艇分のオリジナル展示データを取り込みました${scrTxt}。隊形予想に反映されます。`,got.length>=5);
   calc();
 }
+/* ── 欠場艇の扱い ──
+   欠場艇 = 直前情報で展示タイムが無い艇、またはオッズ(履歴・公式)に出てこない艇。
+   欠場艇を含む買い目は外し、コースは残りの艇で詰めて(欠場艇は最後のコースへ)計算する。 */
+function scratchedLanes(){ return (window.__scratched||[]).slice(); }
+function boatsInCombos(keys){ const s=new Set(); keys.forEach(c=>String(c).split("-").forEach(x=>{ if(/^[1-6]$/.test(x)) s.add(+x); })); return [...s].sort((a,b)=>a-b); }
+function combosNeeded(k){ return Math.floor(0.8*k*(k-1)*(k-2)); }   /* 出走艇数kのときの3連単の8割(6艇120通り→96、5艇60通り→48) */
+function normalizeCoursesForScratch(){
+  const scr=scratchedLanes(); if(!scr.length) return;
+  const cv=l=>+document.getElementById("crs"+l).value;
+  const live=[1,2,3,4,5,6].filter(l=>!scr.includes(l)).sort((a,b)=>cv(a)-cv(b)||a-b);
+  live.forEach((l,i)=>{ document.getElementById("crs"+l).value=String(i+1); });
+  scr.sort((a,b)=>a-b).forEach((l,i)=>{ document.getElementById("crs"+l).value=String(live.length+i+1); });
+}
 function parseChokuzen(){
   const raw=document.getElementById("paste1").value;
   const t=norm(raw);
@@ -2147,11 +2164,12 @@ function parseChokuzen(){
   const wPos=[]; let wm;
   while((wm=wRx.exec(t))) wPos.push(wm.index+wm[0].length);
   for(let i=0;i<wPos.length && m.length<6;i++){
-    const boatNo=m.length+scratched.length+1;   // 何艇目の体重欄か
+    const boatNo=i+1;   // 何艇目の体重欄か
     const endPos=i+1<wPos.length?wPos[i+1]:wPos[i]+120;
     const seg=t.slice(wPos[i], Math.min(endPos, wPos[i]+150));
     const em=seg.match(/(?:^|[^\d.])([67]\.\d{2})(?![\d])/);
-    if(em){ m.push(em[1]); }
+    const scrMark=/欠場/.test(em?seg.slice(0,em.index):seg);   /* タイムより手前に「欠場」とあれば欠場 */
+    if(em&&!scrMark){ m.push(em[1]); }
     else { scratched.push(boatNo); m.push(null); }   /* この艇は欠場の可能性(展示タイム欄が空) */
   }
   if(m.filter(x=>x).length<3){
@@ -2160,6 +2178,26 @@ function parseChokuzen(){
     m=all.filter(v=>{const x=parseFloat(v);return x>=6.2&&x<=7.8;}).slice(0,6);
     scratched=[];
   }
+  /* 展示タイムとしてありえない値(6.4秒未満・7.5秒超、または他艇の中央値から0.6秒以上離れる)は、
+     展示タイム以外の数字を拾ったものとみなし、その艇は欠場扱いにする */
+  const mOrig=m.slice();
+  {
+    const vals=m.map(x=>x?parseFloat(x):null);
+    vals.forEach((x,k)=>{
+      if(x===null) return;
+      const o=vals.filter((y,j)=>j!==k&&y!==null).sort((a,b)=>a-b);
+      const med=o.length?o[Math.floor(o.length/2)]:x;
+      if(x<6.4||x>7.5||Math.abs(x-med)>0.6){ m[k]=null; if(!scratched.includes(k+1)) scratched.push(k+1); }
+    });
+  }
+  /* オッズなどで欠場艇が確定している場合(総合判定から呼ばれたとき)は、それに合わせる */
+  if(Array.isArray(window.__forceScratched)){
+    scratched=window.__forceScratched.slice();
+    scratched.forEach(b=>{ if(b-1<m.length) m[b-1]=null; });
+    m.forEach((x,k)=>{ if(x===null&&!scratched.includes(k+1)&&mOrig[k]) m[k]=mOrig[k]; });   /* 出走が確定している艇は、遅くても元の展示タイムを使う */
+  }
+  scratched.sort((a,b)=>a-b);
+  window.__scratched=scratched.slice();
   if(m.length===0){setMsg("msg1","展示タイムが見つかりませんでした。直前情報ページを貼り付けてください。",false);return;}
   const n=Math.min(6,m.length);
   const avgExh=(m.filter(x=>x).reduce((a,x)=>a+parseFloat(x),0)/(m.filter(x=>x).length||1))||6.85;
@@ -2171,6 +2209,8 @@ function parseChokuzen(){
   let order=[];
   const im=[...raw.matchAll(/img_boat2_(\d)\.png/g)].map(x=>+x[1]);
   im.forEach(b=>{ if(b>=1&&b<=6&&!order.includes(b)) order.push(b); });
+  const withScr=o=>(scratched.length&&o.length===6-scratched.length&&o.every(b=>!scratched.includes(b)))?o.concat([...scratched].sort((a,b)=>a-b)):o;
+  order=withScr(order);
   if(order.length!==6){
     /* 「スタート展示」以降で、艇番とSTの並びを拾う。
        PC版は「1  .03」、モバイル版は「1.05」「6F.02」のように空白が無い形式。 */
@@ -2183,17 +2223,21 @@ function parseChokuzen(){
       const got=[]; let mm;
       while((mm=rx.exec(seg))){ const b=+mm[1]; if(!got.includes(b)) got.push(b); }
       if(got.length===6) order=got;
+      else{ const o2=withScr(got); if(o2.length===6) order=o2; }
     }
   }
   let entry="";
   if(order.length===6){
     order.forEach((boat,idx)=>{ document.getElementById("crs"+boat).value=idx+1; });
-    const chg=order.some((b,i)=>b!==i+1);
-    entry=" / 進入→"+order.join("・")+(chg?"(前づけあり)":"(枠なり)");
+    const live=order.filter(b=>!scratched.includes(b)); const srt=[...live].sort((a,b)=>a-b);
+    const chg=live.some((b,i)=>b!==srt[i]);
+    entry=" / 進入→"+live.join("・")+(chg?"(前づけあり)":"(枠なり)")+(scratched.length?`(${scratched.join("・")}号艇欠場)`:"");
+  }else if(scratched.length){
+    normalizeCoursesForScratch();   /* 進入が読めなくても、欠場艇を除いた枠なりにしておく */
   }
   const cond=extractConditions(t);
   const scrTxt=scratched.length?(" / ⚠ "+scratched.join("・")+"号艇は欠場の可能性があります(展示タイム未掲載のため平均値を仮置き。このコースは買い目から外してください)"):"";
-  setMsg("msg1",n+"艇分の展示タイムを取り込みました("+m.map(x=>x||"欠場?").join(" / ")+")"+entry
+  setMsg("msg1",m.filter(x=>x).length+"艇分の展示タイムを取り込みました("+m.map(x=>x||"欠場").join(" / ")+")"+entry
     +(cond.length?" / "+cond.join("、"):"")
     +(order.length===6?"":" ※進入を読み取れませんでした。前づけがあれば手で直してください")
     +scrTxt, n===6 && !scratched.length);
@@ -2659,9 +2703,9 @@ function checkFormAlert(crs,behind){
      ただし直近(2026/8/3〜9/21・1,447レース)は65.7%と低調。 */
   const el=document.getElementById("formAlert");
   if(!el)return;
-  const lane4=crs.indexOf(4)+1;
-  if(!lane4){ el.style.display="none"; return; }
-  const innerLanes=[1,2,3].map(c=>crs.indexOf(c)+1).filter(l=>l>0);
+  const lane4=crs.indexOf(4)+1, lane5=crs.indexOf(5)+1, scrL=scratchedLanes();
+  if(!lane4||scrL.includes(lane4)||(lane5&&scrL.includes(lane5))){ el.style.display="none"; window.__lastAlertKey=null; return; }
+  const innerLanes=[1,2,3].map(c=>crs.indexOf(c)+1).filter(l=>l>0&&!scrL.includes(l));
   if(innerLanes.length<3){ el.style.display="none"; return; }
   /* behindは「先頭到達時の遅れ(m)」。4コースが内側全艇より遅れが小さければ前に出ている。 */
   const b4=behind[lane4-1];
@@ -2703,6 +2747,7 @@ function leadTop4(headLane){
   const list=[];
   for(let j=1;j<=6;j++) for(let m=1;m<=6;m++){
     if(j===headLane||m===headLane||j===m) continue;
+    if(scratchedLanes().includes(j)||scratchedLanes().includes(m)) continue;   /* 欠場艇を含む組番は買わない */
     const c=`${headLane}-${j}-${m}`; list.push({c,pr:tripleProbOf(ev.strength,c)});
   }
   return list.sort((a,b)=>b.pr-a.pr).slice(0,4).map(x=>x.c);
@@ -2717,12 +2762,12 @@ function checkLeadAlert(crs,behind){
   const el=document.getElementById("leadAlert");
   if(!el)return;
   if(typeof KIMFULL2==="undefined"){ el.style.display="none"; return; }
-  let best=null;
+  let best=null; const scrL=scratchedLanes();
   for(let c=2;c<=5;c++){   /* 6コースは先行しても1着になりにくく、単勝の実績が弱い(45レース・53.6%)ため対象外 */
     const lane=crs.indexOf(c)+1;
-    if(!lane) continue;
-    const others=[1,2,3,4,5,6].filter(x=>x!==lane);
-    if(others.length<5) continue;
+    if(!lane||scrL.includes(lane)) continue;
+    const others=[1,2,3,4,5,6].filter(x=>x!==lane&&!scrL.includes(x));   /* 欠場艇は比較しない */
+    if(others.length<5-scrL.length) continue;
     const bC=behind[lane-1];
     /* 検証時の条件(他の5艇すべてより2m以上前)に合わせ、他艇で最も前にいる艇と比べる */
     const bestOther=Math.min(...others.map(l=>behind[l-1]));
@@ -2817,7 +2862,7 @@ function runComboJudge(){
   const status=[];   /* [名前, 状態("ok"|"warn"|"ng"|"none"), 説明] */
 
   /* 前のレースの値が残らないよう、毎回リセットしてから取り込む */
-  oddsMap={}; OHOFF={}; OHDATA=[]; OHHeaders=[];
+  oddsMap={}; OHOFF={}; OHDATA=[]; OHHeaders=[]; window.__scratched=[];
   for(let i=1;i<=6;i++){
     document.getElementById("crs"+i).value=String(i);
     document.getElementById("exh"+i).value="6.80";
@@ -2858,7 +2903,8 @@ function runComboJudge(){
   if(oddsT){
     document.getElementById("paste5").value=oddsT;
     parseOddsHistory();
-    ohOk = OHDATA.length>=100;
+    const ohBoats=boatsInCombos(OHDATA.map(r=>r.c)).length;   /* 欠場があれば5艇60通りなど */
+    ohOk = ohBoats>=4 && OHDATA.length>=combosNeeded(ohBoats);
     status.push(["オッズ履歴", ohOk?"ok":"ng", ohOk?`${OHDATA.length}通りの推移を取り込みました`:(txtOf("msg5")||"読み取れませんでした")]);
   }else{
     document.getElementById("paste5").value="";
@@ -2872,15 +2918,33 @@ function runComboJudge(){
     document.getElementById("paste5b").value=finalT;
     loadOhOfficial();
     const n=Object.keys(OHOFF).length;
-    status.push(["直前オッズ", n>=100?"ok":"ng", n>=100?`${n}点を取り込みました(オッズ履歴の「最新」にも使用)`:(txtOf("msg5b")||"読み取れませんでした")]);
+    status.push(["直前オッズ", n>0?"ok":"ng", n>0?`${n}点を取り込みました(オッズ履歴の「最新」にも使用)`:(txtOf("msg5b")||"読み取れませんでした")]);
   }else{
     document.getElementById("paste2").value="";
     document.getElementById("paste5b").value="";
     status.push(["直前オッズ","none", ohOk?"未入力(オッズ履歴の最新列を使用)":"未入力"]);
   }
 
-  /* 基準のプール220%を組む */
-  const base=poolFormation(curPos,2.2);
+  /* 欠場艇の判定: オッズ(履歴・公式)が読めていれば、そこに出てこない艇を欠場とする(確実)。
+     オッズが無ければ、直前情報で展示タイムが無かった艇を欠場とする。 */
+  const oddsKeys=[...OHDATA.map(r=>r.c),...Object.keys(OHOFF)];
+  const chokuScr=scratchedLanes();
+  const scrL=oddsKeys.length>=20?[1,2,3,4,5,6].filter(b=>!boatsInCombos(oddsKeys).includes(b)):chokuScr;
+  window.__scratched=scrL;
+  if(scrL.length){
+    status.push(["欠場","warn",`${scrL.join("・")}号艇(${oddsKeys.length>=20?"オッズに出ていないため":"直前情報に展示タイムが無いため"})。この艇を含む買い目は外し、コースは残りの艇で詰めて計算しています`]);
+  }
+  if(JSON.stringify(scrL)!==JSON.stringify(chokuScr)){
+    if(chokuOk){
+      window.__forceScratched=scrL.slice(); parseChokuzen(); window.__forceScratched=null;   /* 進入も5艇分で読み直す */
+      const si=status.findIndex(x=>x[0]==="直前情報"); if(si>=0) status[si]=["直前情報",isOk("msg1")?"ok":"warn",txtOf("msg1")];
+    }
+    window.__scratched=scrL.slice(); normalizeCoursesForScratch(); calc();
+    if(ohOk) renderOddsHistory();
+  }
+  /* 基準のプール220%を組む(欠場艇の着順確率を0にして、残りの艇で割り振り直す) */
+  const posAdj=curPos.map(arr=>{ const a=arr.map((v,i)=>scrL.includes(i+1)?0:v); const t=a.reduce((x,y)=>x+y,0)||1; return a.map(v=>v/t); });
+  const base=poolFormation(posAdj,2.2);
   let A=new Set(base.A), B=new Set(base.B), C=new Set(base.C);
   let ohNote="";
   if(ohOk){
@@ -2891,7 +2955,7 @@ function runComboJudge(){
       const legs=r.c.split("-").map(Number);
       legs.forEach(l=>{ laneNow[l]+=r.shareNow||0; laneOld[l]+=r.shareOld||0; });
     });
-    const laneDelta=[1,2,3,4,5,6].map(i=>({lane:i,delta:laneNow[i]-laneOld[i]}));
+    const laneDelta=[1,2,3,4,5,6].filter(i=>!scrL.includes(i)).map(i=>({lane:i,delta:laneNow[i]-laneOld[i]}));
     laneDelta.sort((a,b)=>b.delta-a.delta);
     const bestLane=laneDelta[0].lane, worstLane=laneDelta[laneDelta.length-1].lane;
     const bi=bestLane-1, wi=worstLane-1;
@@ -2900,6 +2964,7 @@ function runComboJudge(){
     ohNote=`オッズ履歴: 票が伸びた${bestLane}号艇を2・3着候補に追加、下がった${worstLane}号艇を候補から除外しました`
       +`(蓄積データでの検証: 回収率約92〜95%・339レース)。`;
   }
+  scrL.forEach(l=>{ A.delete(l-1); B.delete(l-1); C.delete(l-1); });   /* 欠場艇は買い目に入れない */
   const combos=combos_(A,B,C);
 
   const formEl=document.getElementById("formAlert");
@@ -2913,7 +2978,8 @@ function runComboJudge(){
     ohOk, chokuOk,
     best: ohOk? ohNote.match(/伸びた(\d)号艇/)?.[1] : null,
     worst: ohOk? ohNote.match(/下がった(\d)号艇/)?.[1] : null,
-    finalUsed: Object.keys(OHOFF).length>=100,
+    finalUsed: Object.keys(OHOFF).length>0,
+    scratched: scrL.slice(),
     form: formHit? plain(formHit):"", lead: leadHit? plain(leadHit):"",
     crs:[1,2,3,4,5,6].map(i=>+document.getElementById("crs"+i).value),
     triMap: (function(){ const m={}; (curTri||[]).forEach(t=>{ m[t.c]=t.pr; }); return m; })(),
@@ -2926,10 +2992,10 @@ function runComboJudge(){
        1マーク先取り予想の下位3コースの艇を除いた残りを相手にする(ツールの「検証済みの形」ボタンと同じ組み方) */
     const byC={}; window.__combo.crs.forEach((cc,i)=>byC[cc]=i+1);
     const h4=byC[4], p5=byC[5], ord=window.__turnOrder;
-    if(h4&&p5&&ord){
+    if(h4&&p5&&ord&&!scrL.includes(h4)&&!scrL.includes(p5)){
       const ex=new Set([h4,p5]);
-      ord.slice(-3).forEach(cc=>{ if(byC[cc]) ex.add(byC[cc]); });
-      const oth=[1,2,3,4,5,6].filter(x=>!ex.has(x));
+      ord.filter(cc=>byC[cc]&&!scrL.includes(byC[cc])).slice(-3).forEach(cc=>{ ex.add(byC[cc]); });   /* 下位3艇は欠場艇を除いて数える */
+      const oth=[1,2,3,4,5,6].filter(x=>!ex.has(x)&&!scrL.includes(x));
       const list=[]; oth.forEach(y=>{ list.push(`${h4}-${p5}-${y}`); list.push(`${h4}-${y}-${p5}`); });
       window.__combo.form45={head:h4, partner:p5, cut:[...ex].filter(x=>x!==h4&&x!==p5), list};
     }
@@ -3012,15 +3078,20 @@ function makeComboNote(){
   const allocSum = arr=>arr.reduce((a,x)=>a+(alloc[x]||0),0);
   const d=new Date(); const ds=`${d.getFullYear()}年${d.getMonth()+1}月${d.getDate()}日`;
   const nm=i=>{ const rd=(typeof fanLookup==="function")?fanLookup(i+1):null; const cls=(document.getElementById("cls"+(i+1))||{}).value||""; const n=rd&&rd[0]?rd[0]:""; return n?(cls?`${n}(${cls})`:n):cls; };
-  const ord=[0,1,2,3,4,5].sort((a,b)=>c.p1[b]-c.p1[a]);
-  const chg=c.crs.some((v,i)=>v!==i+1);
-  const entry=c.chokuOk? [1,2,3,4,5,6].map(cs=>c.crs.indexOf(cs)+1).join("・")+(chg?"(前づけあり)":"(枠なり)") : "未確定(直前情報なし)";
+  const scr=c.scratched||[];
+  const live=[0,1,2,3,4,5].filter(i=>!scr.includes(i+1));
+  const p1s=live.reduce((x,i)=>x+c.p1[i],0)||1;   /* 欠場艇を除いて推定1着率を割り振り直す */
+  const ord=live.slice().sort((a,b)=>c.p1[b]-c.p1[a]);
+  const liveOrder=[1,2,3,4,5,6].map(cs=>c.crs.indexOf(cs)+1).filter(l=>l>0&&!scr.includes(l));
+  const chg=liveOrder.some((l,i)=>l!==[...liveOrder].sort((a,b)=>a-b)[i]);
+  const scrTxt=scr.length?`(${scr.join("・")}号艇欠場)`:"";
+  const entry=c.chokuOk? liveOrder.join("・")+(chg?"(前づけあり)":"(枠なり)")+scrTxt : "未確定(直前情報なし)"+scrTxt;
   let t="";
   t+=`【${venue} ${rno}R 有料予想】${ds}${tm?" 締切"+tm:""}\n\n`;
   t+=`■ レース概要\n`;
   t+=`進入(1コースから順に艇番): ${entry}\n`;
   t+=`モデルの推定1着率(出走表ベース)\n`;
-  ord.forEach(i=>{ t+=`　${i+1}号艇 ${nm(i)} ${(c.p1[i]*100).toFixed(1)}%\n`; });
+  ord.forEach(i=>{ t+=`　${i+1}号艇 ${nm(i)} ${(c.p1[i]/p1s*100).toFixed(1)}%\n`; });
   t+=`\n■ 使った判定材料\n`;
   t+=`・出走表(推定着率からプール220%で候補を作成)\n`;
   t+=c.chokuOk?`・直前情報(展示タイム・進入からスリット隊形を推定)\n`:`・直前情報: なし\n`;
@@ -3183,12 +3254,14 @@ function requestNotifyPermission(){
   });
 }
 function renderSlit(crs){
-  let exSum=0;for(let i=1;i<=6;i++)exSum+=gv("exh"+i);const exMean=exSum/6||6.8;
+  const scrS=scratchedLanes(); const isLive=i=>!scrS.includes(i+1);   /* 欠場艇は図・判定から外す */
+  const liveIdx=[0,1,2,3,4,5].filter(isLive);
+  let exSum=0;liveIdx.forEach(i=>exSum+=gv("exh"+(i+1)));const exMean=exSum/(liveIdx.length||1)||6.8;
   const st=[],exA=[];
   for(let i=1;i<=6;i++){const f=gv("f"+i);st.push(predST(i,crs[i-1])+.02*f);exA.push(Math.max(gv("exh"+i)||exMean,6));}
-  const maxSt=Math.max(...st),minSt=Math.min(...st);
+  const maxSt=Math.max(...liveIdx.map(i=>st[i])),minSt=Math.min(...liveIdx.map(i=>st[i]));
   const byCourse=[[],[],[],[],[],[]];
-  crs.forEach((c,i)=>byCourse[c-1].push(i));
+  crs.forEach((c,i)=>{ if(isLive(i)) byCourse[c-1].push(i); });
   /* 6レーン図の共通描画 */
   function panel(title,cells){
     let h=`<div style="font-size:11px;color:var(--faint);letter-spacing:.08em;margin:12px 0 6px">${title}</div>`;
@@ -3196,7 +3269,7 @@ function renderSlit(crs){
     for(let c=0;c<6;c++){
       h+=`<div class="lane"><span class="cno">コース${c+1}${c===0?"(イン)":c===3?"(カド)":""}</span>`;
       byCourse[c].forEach(i=>{h+=cells[i];});
-      if(byCourse[c].length===0)h+='<span style="font-size:11px;color:var(--faint)">—</span>';
+      if(byCourse[c].length===0)h+=`<span style="font-size:11px;color:var(--faint)">${scrS.length&&c>=6-scrS.length?"(欠場)":"—"}</span>`;
       h+="</div>";
     }
     return h+"</div>";
@@ -3210,11 +3283,11 @@ function renderSlit(crs){
   /* ② 150m地点(1マーク直前): 展示タイム=直線150mの実測から速度を逆算 */
   const v=exA.map(e=>150/e);                       // m/s
   const T=st.map((s,i)=>s+exA[i]);                 // 150m到達時刻
-  const Tmin=Math.min(...T);
+  const Tmin=Math.min(...liveIdx.map(i=>T[i]));
   const behind=st.map((s,i)=>Math.max(0,150-v[i]*(Tmin-s)));  // 先頭到達時の遅れ(m)
   const slitGap=st.map((s,i)=>(s-minSt)*v[i]);                // スリット時点の遅れ(m)
   const gain=behind.map((b,i)=>slitGap[i]-b);                 // 伸び返し(+)/失速(-)
-  const maxB=Math.max(...behind);
+  const maxB=Math.max(...liveIdx.map(i=>behind[i]));
   const mCells=behind.map((b,i)=>{
     const off=Math.min(Math.round((maxB-b)*24),190);
     let g="";
@@ -3239,7 +3312,7 @@ function renderSlit(crs){
     }
   }
   const turn=behind.map((b,i)=>-b+INNER_M[crs[i]-1]+origAdj[i]);
-  const order=[0,1,2,3,4,5].sort((a,b)=>turn[b]-turn[a]);
+  const order=liveIdx.slice().sort((a,b)=>turn[b]-turn[a]);
   window.__turnOrder=order.map(i=>crs[i]);
   window.__slitPos=behind.map(b=>-b);
   checkFormAlert(crs,behind);
@@ -3248,21 +3321,23 @@ function renderSlit(crs){
   h+=panel("1マーク直前・スタートから150m地点 — 展示タイム(直線150m)から速度を逆算。↑=スリットからの伸び返し",mCells);
   h+='<div style="font-size:11px;color:var(--faint);letter-spacing:.08em;margin:12px 0 6px">1マーク先取り予想 — 150m地点の差+内外の位置取り</div>';
   h+='<div class="row" style="gap:6px">'+order.map((i,k)=>
-    `<span class="chip" style="background:${BC[i]};color:${BT[i]}">${i+1}</span>${k<5?'<span style="color:var(--faint)">→</span>':''}`).join("")+"</div>";
+    `<span class="chip" style="background:${BC[i]};color:${BT[i]}">${i+1}</span>${k<order.length-1?'<span style="color:var(--faint)">→</span>':''}`).join("")
+    +(scrS.length?`<span style="font-size:11px;color:var(--faint);margin-left:6px">(${scrS.join("・")}号艇は欠場)</span>`:"")+"</div>";
   /* 展開判定 */
   const b1=byCourse[0][0],kado=byCourse[3][0];
   let vd="";
   if(b1!==undefined){
     if(order[0]===b1&&behind[b1]<=0.5)vd="①が1マーク先取り。逃げ本線。";
     else if(kado!==undefined&&order[0]===kado)vd="④カドが1マーク先取り優勢。まくり本線、内が壁になればまくり差し勢に展開。";
-    else if(Math.max(...behind)<=2)vd="150m地点でほぼ横一線。1マークは団子、差し・まくり差しの余地大。";
+    else if(maxB<=2)vd="150m地点でほぼ横一線。1マークは団子、差し・まくり差しの余地大。";
     else vd=`${order[0]+1}号艇が1マーク先取り優勢。`;
-    const gi=gain.indexOf(Math.max(...gain));
+    const gi=liveIdx.reduce((a,i)=>gain[i]>gain[a]?i:a,liveIdx[0]);
     if(gain[gi]>=0.8)vd+=` 伸び返し最大は${gi+1}号艇(+${gain[gi].toFixed(1)}m)。`;
   }
   /* ③-2 各コースが跳ね上がる条件(蓄積3.9万レースで期間検証済み) */
   const byC={}; crs.forEach((c,i)=>byC[c]=i);
-  const posAt=c=>{const i=byC[c]; return i===undefined?null:-behind[i];};
+  const scrL=scratchedLanes();
+  const posAt=c=>{const i=byC[c]; return (i===undefined||scrL.includes(i+1))?null:-behind[i];};
   const notes=[];
   const boostPlain=[];   /* 総合判定・note記事用に、同じ内容を文字列でも保存する */
   const gradeOf=i=>document.getElementById("cls"+(i+1)).value;
@@ -3270,17 +3345,17 @@ function renderSlit(crs){
   const exOf=i=>gv("exh"+(i+1))||9;
   const nats=[0,1,2,3,4,5].map(natOf), exs=[0,1,2,3,4,5].map(exOf);
   for(let c=1;c<=6;c++){
-    const i=byC[c]; if(i===undefined)continue;
+    const i=byC[c]; if(i===undefined||scrL.includes(i+1))continue;
     const me=posAt(c);
     const inners=[]; for(let x=1;x<c;x++){const p=posAt(x); if(p!==null)inners.push(p);}
     const lead=inners.length?me-Math.max(...inners):null;
-    const isTopRate=nats[i]>=Math.max(...nats.filter((_,j)=>j!==i));
-    const isFastest=exs[i]<=Math.min(...exs.filter((_,j)=>j!==i));
+    const isTopRate=nats[i]>=Math.max(...nats.filter((_,j)=>j!==i&&!scrL.includes(j+1)));
+    const isFastest=exs[i]<=Math.min(...exs.filter((_,j)=>j!==i&&!scrL.includes(j+1)));
     /* 1コース以外は、他の全5艇に対する最小リード(=最も詰まっている相手との差)も見る */
     let leadAll=null;
     if(c!==1){
       const others=[]; for(let x=1;x<=6;x++){ if(x===c)continue; const p=posAt(x); if(p!==null)others.push(p); }
-      if(others.length===5) leadAll=me-Math.max(...others);
+      if(others.length===5-scrL.length&&others.length>=4) leadAll=me-Math.max(...others);
     }
     const hits=[];
     if(c!==1 && leadAll!==null && leadAll>=2){
@@ -3325,7 +3400,7 @@ function renderSlit(crs){
     +notes.join("<br>")+"</div>";
   if(vd)h+=`<div style="font-size:12px;color:var(--sub);margin-top:8px">${vd}</div>`;
   /* ④ アニメーション: 進入→スリット→1マーク到達(同じ物理モデル) */
-  ANIM={st:st.slice(),v:v.slice(),crs:crs.slice(),T:T.slice()};
+  ANIM={st:st.slice(),v:v.slice(),crs:crs.slice(),T:T.slice(),live:liveIdx.slice()};
   const pct=x=>(((Math.max(x,-25)+25)/180*86)+11).toFixed(2);
   h+='<div style="font-size:11px;color:var(--faint);letter-spacing:.08em;margin:14px 0 6px">スタート→1マーク アニメーション — 艇の長さは実寸比(全長2.9m×倍率)。各艇は自分の予想STでラインを通過</div>';
   const magOpt=[[5,"差を強調 ×5(上の図と同縮尺)"],[2,"差を強調 ×2"],[1,"実寸(差はごく僅か)"]].map(o=>`<option value="${o[0]}"${o[0]===animK?" selected":""}>${o[1]}</option>`).join("");
@@ -3344,8 +3419,9 @@ function renderSlit(crs){
   h+=`<div style="position:absolute;right:10px;top:6px;font-size:10px;color:var(--faint)"><span style="display:inline-block;width:${barW}%;min-width:${(5*animK*0.55).toFixed(0)}px;border-bottom:2px solid var(--faint);margin-right:4px;vertical-align:middle"></span>5m</div>`;
   const boatL=(2.9*animK/180*86).toFixed(2), boatH=Math.min(Math.round(4*animK)+2,16);
   const stack=[0,0,0,0,0,0];
-  const stM=st.reduce((a,b)=>a+b,0)/6, vM=v.reduce((a,b)=>a+b,0)/6;
+  const stM=liveIdx.reduce((a,i)=>a+st[i],0)/liveIdx.length, vM=liveIdx.reduce((a,i)=>a+v[i],0)/liveIdx.length;
   for(let i=0;i<6;i++){
+    if(!isLive(i)) continue;   /* 欠場艇は描かない */
     const ci=crs[i]-1, top=12+ci*30+stack[ci]*8; stack[ci]++;
     const stD=stM+(st[i]-stM)*animK, vD=Math.max(vM+(v[i]-vM)*animK,5);
     const x0=vD*(-1.0-stD);
@@ -3365,11 +3441,12 @@ function playAnim(){
   const pct=x=>(((Math.max(x,-25)+25)/180*86)+11).toFixed(2);
   const spd=animSpd||1;
   const K=animK||1;
-  const stM=ANIM.st.reduce((a,b)=>a+b,0)/6, vM=ANIM.v.reduce((a,b)=>a+b,0)/6;
+  const LV=ANIM.live||[0,1,2,3,4,5];
+  const stM=LV.reduce((a,i)=>a+ANIM.st[i],0)/LV.length, vM=LV.reduce((a,i)=>a+ANIM.v[i],0)/LV.length;
   const stD=ANIM.st.map(s=>stM+(s-stM)*K);
   const vD=ANIM.v.map(x=>Math.max(vM+(x-vM)*K,5));
   const TD=stD.map((s,i)=>s+150/vD[i]);
-  const t0=-1.0, t1=Math.min(...TD);
+  const t0=-1.0, t1=Math.min(...LV.map(i=>TD[i]));   /* 欠場艇は終わりの時刻に含めない */
   const begin=performance.now();
   const crossed=[false,false,false,false,false,false];
   function frame(now){
