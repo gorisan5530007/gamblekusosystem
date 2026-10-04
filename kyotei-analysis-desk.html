@@ -240,7 +240,7 @@ footer{margin-top:28px;font-size:12px;color:var(--faint);border-top:1px solid va
         <option value="poolExclTop">プール220%(着率トップ除外・再配分)</option>
         <option value="cum">累積60-70-80</option>
         <option value="top1">1点予想(モデル最有力の1点)</option>
-        <option value="probTh">的中率◯%以上の出目だけ</option>
+        <option value="probTh">的中率◯%以上の出目(最上位1点)</option>
       </select>
       <span id="probThBox" style="display:none;font-size:12px"><input type="number" id="progProbTh" value="15" min="1" max="60" step="1" style="width:52px" oninput="renderReco()">%以上</span>
       <button onclick="makeNote()">note用の記事を作る</button>
@@ -1187,14 +1187,14 @@ function poolFormation(pos,budget){
 function progTh(){ if(window.__probThOverride) return window.__probThOverride; const v=+((document.getElementById("progProbTh")||{}).value); return v>0?v:15; }
 function getFormationByMethod(pos,methodId,ev){
   if(methodId==="probTh" && ev && ev.strength){
-    /* モデルの確率(1着・2着・3着の同時確率)が基準以上の出目だけを、確率の高い順に並べる */
+    /* モデルの確率(1着・2着・3着の同時確率)が基準以上の出目のうち、確率が一番高い1点だけを買う */
     const th=progTh()/100, sel=[];
     for(let a=1;a<=6;a++)for(let b=1;b<=6;b++)for(let c=1;c<=6;c++){
       if(a===b||b===c||a===c) continue;
       const k=`${a}-${b}-${c}`, p=tripleProbOf(ev.strength,k); if(p>=th) sel.push([k,p]);
     }
     sel.sort((x,y)=>y[1]-x[1]);
-    const L=sel.map(x=>x[0]), at=i=>[...new Set(L.map(c=>+c.split("-")[i]-1))];
+    const L=sel.slice(0,1).map(x=>x[0]), at=i=>[...new Set(L.map(c=>+c.split("-")[i]-1))];
     return {A:at(0),B:at(1),C:at(2),list:L,explicit:true};
   }
   if(methodId==="top1" && ev){
