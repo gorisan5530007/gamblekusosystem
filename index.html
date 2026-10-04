@@ -240,7 +240,9 @@ footer{margin-top:28px;font-size:12px;color:var(--faint);border-top:1px solid va
         <option value="poolExclTop">プール220%(着率トップ除外・再配分)</option>
         <option value="cum">累積60-70-80</option>
         <option value="top1">1点予想(モデル最有力の1点)</option>
+        <option value="probTh">的中率◯%以上の出目だけ</option>
       </select>
+      <span id="probThBox" style="display:none;font-size:12px"><input type="number" id="progProbTh" value="15" min="1" max="60" step="1" style="width:52px" oninput="renderReco()">%以上</span>
       <button onclick="makeNote()">note用の記事を作る</button>
       <button onclick="document.getElementById('paste3').value='';document.getElementById('recoOut').innerHTML='';document.getElementById('fileName').textContent='B******.TXT を選択、または下に貼り付け';">クリア</button>
     </div>
@@ -1125,7 +1127,7 @@ function noteList(){
   const mode=document.getElementById("recoMode").value;
   let list=PROG.map(x=>{
     const ev=evalRace(x);
-    const pts=getFormationByMethod(ev.pos,currentFormMethod()==="top1"?"pool":currentFormMethod(),ev).list.length;
+    const pts=getFormationByMethod(ev.pos,["top1","probTh"].includes(currentFormMethod())?"pool":currentFormMethod(),ev).list.length;
     return {...x,ev,pts};
   });
   /* 画面の一覧と同じく、選んだ会場だけに絞る(記事・結果検証が一覧と一致するように) */
@@ -1137,6 +1139,7 @@ function noteList(){
   else if(mode==="gachi") list=list.filter(x=>x.pts<=2);
   else if(mode==="cocomo") list=list.filter(x=>Math.max(...x.ev.P)>=70 && poolFormation(x.ev.pos,2.2).list.length<=4);   /* 点数は買い方に関係なくプール220%で数える */
   else if(mode==="custom") list=list.filter(matchCustom);
+  if(currentFormMethod()==="probTh") list=list.filter(x=>getFormationByMethod(x.ev.pos,"probTh",x.ev).list.length>0);   /* 基準以上の出目が無いレースは買わない */
   const sort=document.getElementById("recoSort").value;
   const tv=x=>x.dl?(+x.dl.split(":")[0])*60+(+x.dl.split(":")[1]):9999;
   if(sort==="time") list.sort((a,b)=>tv(a)-tv(b)||a.v-b.v);
@@ -1180,7 +1183,20 @@ function poolFormation(pos,budget){
   Aa.forEach(a=>Bb.forEach(b=>Cc.forEach(c=>{ if(a!==b&&b!==c&&a!==c) list.push(`${a+1}-${b+1}-${c+1}`); })));
   return {A:Aa,B:Bb,C:Cc,list:[...new Set(list)]};
 }
+/* 「的中率◯%以上の出目だけ」の基準(%)。結果検証では記事を作ったときの値を使う */
+function progTh(){ if(window.__probThOverride) return window.__probThOverride; const v=+((document.getElementById("progProbTh")||{}).value); return v>0?v:15; }
 function getFormationByMethod(pos,methodId,ev){
+  if(methodId==="probTh" && ev && ev.strength){
+    /* モデルの確率(1着・2着・3着の同時確率)が基準以上の出目だけを、確率の高い順に並べる */
+    const th=progTh()/100, sel=[];
+    for(let a=1;a<=6;a++)for(let b=1;b<=6;b++)for(let c=1;c<=6;c++){
+      if(a===b||b===c||a===c) continue;
+      const k=`${a}-${b}-${c}`, p=tripleProbOf(ev.strength,k); if(p>=th) sel.push([k,p]);
+    }
+    sel.sort((x,y)=>y[1]-x[1]);
+    const L=sel.map(x=>x[0]), at=i=>[...new Set(L.map(c=>+c.split("-")[i]-1))];
+    return {A:at(0),B:at(1),C:at(2),list:L,explicit:true};
+  }
   if(methodId==="top1" && ev){
     /* 1点予想: プール220%の候補の中でモデルの同時確率が最も高い1点(ガチガチの1点と同じ選び方) */
     const c=gachiTopCombo(ev); const [a,b,d]=c.split("-").map(n=>+n-1);
@@ -1271,7 +1287,7 @@ function makeNote(){
   const chipTxt=i=>String(i+1);
   const joinNum=arr=>arr.map(chipTxt).join("");     /* 確率が高い順のまま連結(ソートしない) */
   const formMethod=currentFormMethod();
-  const formMethodLabel={pool:"プール220%",poolExclTop:"プール220%・着率トップ除外",cum:"累積60-70-80",top1:"1点予想(モデル最有力)"}[formMethod]||"プール220%";
+  const formMethodLabel={pool:"プール220%",poolExclTop:"プール220%・着率トップ除外",cum:"累積60-70-80",top1:"1点予想(モデル最有力)",probTh:`的中率${progTh()}%以上の出目`}[formMethod]||"プール220%";
   const mode0b=document.getElementById("recoMode").value;
   const cumTxt=x=>{
     const f=getFormationByMethod(x.ev.pos,formMethod,x.ev);
@@ -1279,6 +1295,7 @@ function makeNote(){
       /* ガチガチモードは、抽出時と同じプール220%の候補から最も的中確率が高い1点だけを買い目にする */
       return `${gachiTopCombo(x.ev)}（1点）`;
     }
+    if(f.explicit) return `${f.list.join(" / ")}（${f.list.length}点）`;
     return `${joinNum(f.A)}-${joinNum(f.B)}-${joinNum(f.C)}（${f.list.length}点）`;
   };
   const kimTxt=x=>(x.ev.kimTop||[]).map(r=>`${r.c}号艇${r.km}(${(r.p*100).toFixed(1)}%)`).join(" / ");
@@ -1315,6 +1332,7 @@ function makeNote(){
   window.__lastNoteList=list;   /* 結果検証記事で使う */
   window.__lastNoteMode=mode0b;  /* 検証は、記事を作ったときの買い方で行う */
   window.__lastNoteMethod=formMethod;
+  window.__lastNoteTh=progTh();
   window.__lastNoteMode=document.getElementById("recoMode").value;
 }
 let KRESULT=[];   /* [{v(場コード), r(R), combo, amount}] */
@@ -1360,8 +1378,9 @@ function verifyResults(){
     return;
   }
   /* 判定基準は、番組表タブで選んでいる買い方(既定:プール220%)の的中で統一する */
+  window.__probThOverride=(window.__lastNoteMethod==="probTh")?window.__lastNoteTh:null;
   const vFormMethod=window.__lastNoteMethod||currentFormMethod();
-  const vFormMethodLabel={pool:"プール220%",poolExclTop:"プール220%・着率トップ除外",cum:"累積60-70-80",top1:"1点予想(モデル最有力)"}[vFormMethod]||"プール220%";
+  const vFormMethodLabel={pool:"プール220%",poolExclTop:"プール220%・着率トップ除外",cum:"累積60-70-80",top1:"1点予想(モデル最有力)",probTh:`的中率${progTh()}%以上の出目`}[vFormMethod]||"プール220%";
   const isGachi=window.__lastNoteMode==="gachi"||window.__lastNoteMode==="cocomo";   /* どちらも1点(100円)で判定 */
   const rows=list.map(x=>{
     const kr=KRESULT.find(k=>k.v===x.v && k.r===x.r);
@@ -1375,7 +1394,7 @@ function verifyResults(){
     const f=getFormationByMethod(x.ev.pos,vFormMethod,x.ev);
     const hit=f.list.includes(kr.combo);
     const joinNum2=arr=>arr.map(i=>i+1).join("");   /* 確率が高い順のまま連結(ソートしない) */
-    const desc=`${joinNum2(f.A)}-${joinNum2(f.B)}-${joinNum2(f.C)}(${f.list.length}点)`;
+    const desc=f.explicit?`${f.list.join(" / ")}(${f.list.length}点)`:`${joinNum2(f.A)}-${joinNum2(f.B)}-${joinNum2(f.C)}(${f.list.length}点)`;
     const cost=f.list.length*100;
     const ret=hit?kr.amount:0;
     return {x,kr,hit,desc,pts:f.list.length,cost,ret};
@@ -1386,7 +1405,7 @@ function verifyResults(){
   const retTotal=matched.reduce((a,r)=>a+r.ret,0);
   const roi=invTotal?(retTotal/invTotal*100):0;
   const isSingle=isGachi||vFormMethod==="top1";
-  let h='<table><thead><tr><th>場</th><th class="num">R</th><th>'+(isSingle?'買い目(1点)':'フォーメーション')+'</th>'
+  let h='<table><thead><tr><th>場</th><th class="num">R</th><th>'+(isSingle?'買い目(1点)':(vFormMethod==="probTh"?'買い目':'フォーメーション'))+'</th>'
    +'<th class="num">結果(3連単)</th><th class="num">払戻</th><th>判定</th></tr></thead><tbody>';
   matched.forEach(({x,kr,hit,desc})=>{
     h+=`<tr><td style="font-size:12px">${VENMAP[x.v]||x.v}</td><td class="num">${x.r}R</td>
@@ -1397,12 +1416,14 @@ function verifyResults(){
   });
   h+="</tbody></table>";
   document.getElementById("verifyOut").innerHTML=h
-    +`<p class="hint" style="margin-top:8px">${isGachi?(window.__lastNoteMode==="cocomo"?"ココモ法用1点予想":"ガチガチ(最有力1点)"):(vFormMethod==="top1"?"1点予想(モデル最有力)":"フォーメーション")}で書き出した ${matched.length}/${list.length} 件のうち、的中は ${hitN} 件(${matched.length?(hitN/matched.length*100).toFixed(1):"0"}%)。`
+    +`<p class="hint" style="margin-top:8px">${isGachi?(window.__lastNoteMode==="cocomo"?"ココモ法用1点予想":"ガチガチ(最有力1点)"):(vFormMethod==="top1"?"1点予想(モデル最有力)":vFormMethod==="probTh"?`的中率${window.__lastNoteTh}%以上の出目`:"フォーメーション")}で書き出した ${matched.length}/${list.length} 件のうち、的中は ${hitN} 件(${matched.length?(hitN/matched.length*100).toFixed(1):"0"}%)。`
     +`投資${invTotal.toLocaleString()}円 → 払戻${retTotal.toLocaleString()}円(回収率${roi.toFixed(1)}%)。</p>`;
+  window.__probThOverride=null;
   window.__verifyRows=matched;
   window.__verifyGachi=isGachi;
   window.__verifyCocomo=(window.__lastNoteMode==="cocomo");
   window.__verifyTop1=(vFormMethod==="top1");
+  window.__verifyProbTh=(vFormMethod==="probTh")?window.__lastNoteTh:null;
   setMsg2("verifyMsg",`${matched.length}件を照合しました`,true);
 }
 function setMsg2(id,txt,ok){const e=document.getElementById(id);e.textContent=txt;e.style.color=ok?"var(--pos)":"var(--neg)";}
@@ -1413,9 +1434,9 @@ function makeVerifyNote(){
   const invTotal=rows.reduce((a,r)=>a+r.cost,0);
   const retTotal=rows.reduce((a,r)=>a+r.ret,0);
   const roi=invTotal?(retTotal/invTotal*100):0;
-  const vFormMethodLabel={pool:"プール220%",poolExclTop:"プール220%・着率トップ除外",cum:"累積60-70-80",top1:"1点予想(モデル最有力)"}[window.__lastNoteMethod||currentFormMethod()]||"プール220%";
+  const vFormMethodLabel={pool:"プール220%",poolExclTop:"プール220%・着率トップ除外",cum:"累積60-70-80",top1:"1点予想(モデル最有力)",probTh:`的中率${progTh()}%以上の出目`}[window.__lastNoteMethod||currentFormMethod()]||"プール220%";
   const g=!!window.__verifyGachi;
-  const head=`${fmtJDate(window.__kDate||window.__progDate)}の答え合わせ — ${window.__verifyCocomo?"ココモ法用1点予想":(g?"ガチガチレースの1点予想":(window.__verifyTop1?"1点予想":"フォーメーション"))}は当たったか`;
+  const head=`${fmtJDate(window.__kDate||window.__progDate)}の答え合わせ — ${window.__verifyCocomo?"ココモ法用1点予想":(g?"ガチガチレースの1点予想":(window.__verifyTop1?"1点予想":window.__verifyProbTh?`的中率${window.__verifyProbTh}%以上の出目`:"フォーメーション"))}は当たったか`;
   let t=`【${head}】\n\n`
    +`照合レース数 ${rows.length}件 / 的中 ${hitN}件(${(hitN/rows.length*100).toFixed(1)}%) / `
    +`投資${invTotal.toLocaleString()}円 → 払戻${retTotal.toLocaleString()}円(回収率${roi.toFixed(1)}%)\n\n`;
@@ -1630,13 +1651,14 @@ function classifyPattern(ev){
 }
 function renderReco(){
   buildCustom();
+  { const b=document.getElementById("probThBox"); if(b) b.style.display=currentFormMethod()==="probTh"?"":"none"; }
   const out=document.getElementById("recoOut");
   if(!PROG.length){out.innerHTML="";return;}
   const mode=document.getElementById("recoMode").value;
   document.getElementById("customBox").style.display=mode==="custom"?"":"none";
   let list=PROG.map(x=>{
     const ev=evalRace(x);const pat=classifyPattern(ev);
-    const pts=getFormationByMethod(ev.pos,currentFormMethod()==="top1"?"pool":currentFormMethod(),ev).list.length;
+    const pts=getFormationByMethod(ev.pos,["top1","probTh"].includes(currentFormMethod())?"pool":currentFormMethod(),ev).list.length;
     return {...x,ev,pat,roi:PATTERN_ROI[pat],pts};
   });
   const vset=progVenueSet();
@@ -1647,6 +1669,7 @@ function renderReco(){
   else if(mode==="aare") list=list.filter(x=>x.ev.weak1);
   else if(mode==="gachi") list=list.filter(x=>x.pts<=2);
   else if(mode==="cocomo") list=list.filter(x=>Math.max(...x.ev.P)>=70 && poolFormation(x.ev.pos,2.2).list.length<=4);   /* 点数は買い方に関係なくプール220%で数える */
+  if(currentFormMethod()==="probTh") list=list.filter(x=>getFormationByMethod(x.ev.pos,"probTh",x.ev).list.length>0);   /* 基準以上の出目が無いレースは買わない */
   const sort=document.getElementById("recoSort").value;
   const tv=x=>x.dl?(+x.dl.split(":")[0])*60+(+x.dl.split(":")[1]):9999;
   if(sort==="time") list.sort((a,b)=>tv(a)-tv(b)||a.v-b.v);
