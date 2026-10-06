@@ -2729,8 +2729,7 @@ function calc(){
 }
 function checkFormAlert(crs,behind){
   /* 「4→5の形」: 4コースが1マークで内勢(1,2,3コース)より前に出ている状態を検出して通知する。
-     蓄積データでの検証: 該当時の回収率は約89%(先取り下位3艇を切った形で8,790レース・〜2026/9/21)。
-     ただし直近(2026/8/3〜9/21・1,447レース)は65.7%と低調。 */
+     蓄積データでの検証: 該当時の回収率は約89.5%(先取り下位3艇を切った形で8,951レース・〜2026/10/3)。月ごとの振れが大きい。 */
   const el=document.getElementById("formAlert");
   if(!el)return;
   const lane4=crs.indexOf(4)+1, lane5=crs.indexOf(5)+1, scrL=scratchedLanes();
@@ -2745,7 +2744,7 @@ function checkFormAlert(crs,behind){
   if(lead>=0){
     el.style.display="";
     el.innerHTML=`<b>🔔 検証済みの形に該当</b> — ④コースが1マークで内勢より${lead.toFixed(1)}m前に出ています。`
-      +`「④→⑤絡み」の形が使える状況です(蓄積データでの検証: 回収率約89%・8,790レース。ただし直近2026/8〜9月は65.7%と低調)。`
+      +`「④→⑤絡み」の形が使える状況です(蓄積データでの検証: 回収率約89.5%・8,951レース。月ごとの振れが大きく、100%には届いていません)。`
       +`<button style="margin-left:8px" onclick="document.getElementById('formBtns').scrollIntoView({behavior:'smooth'})">買い目を見る</button>`;
     if(document.getElementById("notifyToggle")&&document.getElementById("notifyToggle").checked
        && window.__lastAlertKey!==JSON.stringify(crs)){
@@ -2782,11 +2781,30 @@ function leadTop4(headLane){
   }
   return list.sort((a,b)=>b.pr-a.pr).slice(0,4).map(x=>x.c);
 }
+/* 市場が見積もる「その艇が1着になる確率」。3連単オッズの逆数を全体で割り、その艇が1着の出目を合計する */
+function marketHeadProb(lane){
+  let src=null, nm="";
+  if(typeof OHOFF!=="undefined"&&Object.keys(OHOFF).length){ src=OHOFF; nm="公式の直前オッズ"; }
+  else if(typeof oddsMap!=="undefined"&&Object.keys(oddsMap).length>=48){ src=oddsMap; nm="公式の3連単オッズ"; }
+  else if(typeof OHDATA!=="undefined"&&OHDATA.length){ src={}; OHDATA.forEach(r=>{ const v=ohNow(r); if(v>0) src[r.c]=v; }); nm="オッズ履歴の最新"; }
+  if(!src) return null;
+  let tot=0,h=0;
+  for(const c in src){ const o=parseFloat(src[c]); if(!(o>0)) continue; tot+=1/o; if(c.split("-")[0]===String(lane)) h+=1/o; }
+  return tot>0?{p:h/tot,src:nm}:null;
+}
+function leadMarketNote(lane){
+  const mk=marketHeadProb(lane); window.__leadMk=mk;
+  if(!mk) return `<br>市場の評価: 直前の3連単オッズを貼ると表示します(${lane}号艇の1着を市場が35%未満と見ていれば狙い目)`;
+  const pc=mk.p*100;
+  return `<br>市場の評価: ${lane}号艇の1着 <b>${pc.toFixed(1)}%</b>(${mk.src}から) → `
+    +(pc<35?`<b>狙い目</b>(35%未満のとき: 過去1年451レース・単勝131.5%)`:`優位なし(35%以上のとき: 過去1年335レース・単勝94.9%)`);
+}
 function checkLeadAlert(crs,behind){
   /* 「先行艇×捲り率」の形: 1コース以外のいずれかの艇が、1マークで他の5艇全員より2m以上前に出ており、
      かつその艇の登録選手が該当コースでの捲り率5%以上(走数10以上)の場合に通知する。
-     蓄積データでの検証(2〜5コース・〜2026/9/23): 単勝回収率約119%(探索120.2%・検証117.3%、802レース)。
-     3連単(先行艇1着固定・PROGM確率上位4点・1点100円): 回収率116.2%(探索123.9%・検証104.3%、719レース)。
+     蓄積データでの検証(2〜5コース・確定オッズのある1年分): 単勝回収率115.9%(探索115.0%・検証117.2%、786レース)。
+     市場の評価(3連単オッズから見たこの艇の1着確率)が35%未満なら単勝131.5%(451レース)、35%以上なら94.9%(335レース)。
+     3連単(先行艇1着固定・PROGM確率上位4点・1点100円): 回収率112.9%(探索122.5%・検証99.2%、786レース)。
      ※3連単は14通りの買い方を試した中で良かったもの。単勝より不確か。
      6コースの先行艇は45レースで53.6%と弱いため対象外。ただし6コース除外は結果を見てから決めた条件なので、今後のデータで確認が必要。 */
   const el=document.getElementById("leadAlert");
@@ -2817,14 +2835,15 @@ function checkLeadAlert(crs,behind){
     el.style.display="";
     el.innerHTML=`<b>🔔 検証済みの形に該当</b> — ${best.c}コース(${best.lane}号艇)が1マークで他艇より${best.lead.toFixed(1)}m前に出ており、`
       +`このコースでの捲り率が${(best.makuri*100).toFixed(1)}%(5%以上)あります。`
-      +`単勝で狙える状況です(蓄積データでの検証: 2〜5コースの先行艇で単勝回収率約119%・802レース)。`
+      +`単勝で狙える状況です(蓄積データでの検証: 2〜5コースの先行艇で単勝回収率115.9%・786レース)。`
+      +leadMarketNote(best.lane)
       +(top4.length?`<br>3連単なら ${best.lane}号艇1着固定・モデル確率上位4点: <b>${top4.join(" / ")}</b>`
-        +`(検証: 回収率116.2%・719レース。単勝より不確か)`:"");
+        +`(検証: 回収率112.9%・786レース。ただし2026年5月以降は99.2%で、単勝より不確か)`:"");
     if(document.getElementById("notifyToggle")&&document.getElementById("notifyToggle").checked
        && window.__lastLeadAlertKey!==JSON.stringify(crs)){
       window.__lastLeadAlertKey=JSON.stringify(crs);
       if("Notification" in window && Notification.permission==="granted"){
-        new Notification("先行艇×捲り率の形に該当",{body:`${best.c}コース(${best.lane}号艇)が${best.lead.toFixed(1)}m前・捲り率${(best.makuri*100).toFixed(1)}%。単勝回収率実績約119%(802レース)の形です。`});
+        new Notification("先行艇×捲り率の形に該当",{body:`${best.c}コース(${best.lane}号艇)が${best.lead.toFixed(1)}m前・捲り率${(best.makuri*100).toFixed(1)}%。単勝回収率実績115.9%(786レース)の形です。市場の評価が35%未満なら狙い目です。`});
       }
       try{
         const ctx=new (window.AudioContext||window.webkitAudioContext)();
@@ -2992,10 +3011,11 @@ function runComboJudge(){
     B.add(bi); C.add(bi);
     A.delete(wi); B.delete(wi); C.delete(wi);
     ohNote=`オッズ履歴: 票が伸びた${bestLane}号艇を2・3着候補に追加、下がった${worstLane}号艇を候補から除外しました`
-      +`(蓄積データでの検証: 回収率約92〜95%・339レース)。`;
+      +`(蓄積データでの検証: 回収率約82%・約990レース。同じレースでプール220%だけなら約74%)。`;
   }
   scrL.forEach(l=>{ A.delete(l-1); B.delete(l-1); C.delete(l-1); });   /* 欠場艇は買い目に入れない */
   const combos=combos_(A,B,C);
+  if(chokuOk && (ohOk||Object.keys(OHOFF).length)) calc();   /* オッズを読んだあとで通知を作り直し、先行艇の市場の評価を出す */
 
   const formEl=document.getElementById("formAlert");
   const leadEl=document.getElementById("leadAlert");
@@ -3014,7 +3034,8 @@ function runComboJudge(){
     crs:[1,2,3,4,5,6].map(i=>+document.getElementById("crs"+i).value),
     triMap: (function(){ const m={}; (curTri||[]).forEach(t=>{ m[t.c]=t.pr; }); return m; })(),
     boost: (chokuOk && window.__boost)? window.__boost.list.slice() : [],
-    leadTop4: (leadHit && window.__leadTop4)? window.__leadTop4 : null
+    leadTop4: (leadHit && window.__leadTop4)? window.__leadTop4 : null,
+    leadMk: (leadHit && window.__leadMk)? window.__leadMk : null
   };
   window.__combo.form45=null;
   if(formHit){
@@ -3176,13 +3197,14 @@ function makeComboNote(){
     if(b.dip) t+=`・跳ね上がり条件: ${b.lane}号艇(1コース)がスリットで外側の艇より${b.label.replace(/^外勢より|凹む$/g,"")}凹む隊形で、過去の実績ではイン1着率が約${b.rate}%に下がります(基準56.5%)。\n`;
     else t+=`・跳ね上がり条件: ${b.lane}号艇(${b.course}コース)「${b.label}」に該当。過去の実績で、このコースの1着率が${b.rate}%(このコースの平均の${b.idx}%)まで上がる条件です。\n`;
   });
+  if(c.lead&&c.leadMk) t+=`・市場の評価: 3連単オッズ(${c.leadMk.src})から見た先行艇の1着確率は${(c.leadMk.p*100).toFixed(1)}%。`+(c.leadMk.p<0.35?`35%未満で、過去1年の単勝は131.5%(451レース)でした。\n`:`35%以上で、過去1年の単勝は94.9%(335レース)と優位はありませんでした。\n`);
   t+=`※買い目は総合判定(出走表のプール220%+票の動き)によるものです。検証済みパターンは展開の参考情報です。\n`;
   if(c.lead&&lm) t+=`※単勝で狙う場合は ${lm[2]}号艇(この形の検証は単勝で行っています)。\n`;
   t+=`\n■ 過去データでの検証値(参考)\n`;
-  t+=`・プール220%(出走表のみ): 18,873レースで回収率79.3%\n`;
-  if(c.ohOk) t+=`・票の動きによる追加・除外: 339レースで回収率約92〜95%(件数が少なく、今後変動する可能性があります)\n`;
-  if(c.form) t+=`・④→⑤の形: 8,790レースで回収率約89%(ただし直近2026年8〜9月は65.7%と低調)\n`;
-  if(c.lead) t+=`・先行艇×捲り率(2〜5コース・捲り率5%以上): 単勝で802レース・回収率約119%(探索120.2%・検証117.3%)。3連単のモデル確率上位4点は719レース・回収率116.2%(探索123.9%・検証104.3%。14通りの買い方を試した中で良かったもので、単勝より不確かです)。6コースの先行艇は実績が弱いため対象外にしています\n`;
+  t+=`・プール220%(出走表のみ): 1年分54,734レースで回収率74.9%\n`;
+  if(c.ohOk) t+=`・票の動きによる追加・除外: 約990レースで回収率約82%(同じレースでプール220%だけなら約74%)\n`;
+  if(c.form) t+=`・④→⑤の形: 8,951レースで回収率約89.5%(月ごとの振れが大きい)\n`;
+  if(c.lead) t+=`・先行艇×捲り率(2〜5コース・捲り率5%以上): 単勝で786レース・回収率115.9%(探索115.0%・検証117.2%)。市場の評価が35%未満のときは451レース・131.5%、35%以上のときは335レース・94.9%。3連単のモデル確率上位4点は786レース・回収率112.9%(探索122.5%・検証99.2%。単勝より不確かです)。6コースの先行艇は実績が弱いため対象外にしています\n`;
   if((c.boost||[]).length) t+=`・跳ね上がり条件: 蓄積約3.9万レースでの1着率の実績(回収率ではなく、1着になりやすさの指標です)\n`;
   t+=`\n※上記は過去データでの検証結果であり、今後の的中や利益を保証するものではありません。舟券の購入はご自身の判断と責任で、無理のない範囲でお楽しみください。\n`;
   t+=`※本予想は個人の分析によるもので、BOATRACE振興会・各施行者とは関係ありません。\n`;
