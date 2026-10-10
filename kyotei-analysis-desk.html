@@ -265,7 +265,7 @@ footer{margin-top:28px;font-size:12px;color:var(--faint);border-top:1px solid va
           <label style="font-size:12px">点数(プール220%)</label>
           <input type="number" id="cu_ptslo" placeholder="下限" style="width:48px" min="1" oninput="renderReco()">
           <span style="font-size:12px;color:var(--faint)">〜</span>
-          <input type="number" id="cu_ptshi" placeholder="上限" value="2" style="width:48px" min="1" oninput="renderReco()">
+          <input type="number" id="cu_ptshi" placeholder="上限" value="" style="width:48px" min="1" oninput="renderReco()">
           <span style="font-size:12px;color:var(--sub)">点</span>
         </span>
         <span style="display:inline-flex;align-items:center;gap:3px">
@@ -826,6 +826,9 @@ function courseRec(i,c){
   const shrunk=(pct/100*races+20*prior)/(races+20);
   return{shrunk,races,prior,name:rd[0],grade:rd[1]};
 }
+/* フライング持ちのST補正(実績: 2025/11〜2026/10・約31万走。本人の過去平均STより F1は+0.015秒、F2以上は+0.055秒遅い。
+   この補正を入れると先行艇×捲り率の単勝は 115.6%→117.6%(検証期間 116.4%→121.0%)) */
+function fAdj(f){ f=+f||0; return f>=2?0.055:(f>=1?0.015:0); }
 /* コース別ST実績と入力平均STのブレンド(サンプル10走分で収縮) */
 function predST(i,c){
   const base=gv("st"+i)||0.16;
@@ -1315,6 +1318,14 @@ function makeNote(){
          +`　展開予想 ${kimTxt(x)}\n`
          +`　フォーメーション ${cumTxt(x)}`;
      }).join("\n\n");
+  }
+  {
+    /* タイトルの後に、レース数・締切の範囲・平均点数を入れる */
+    const dls=list.map(x=>x.dl).filter(Boolean).sort((a,b)=>{const f=v=>{const [h,m]=v.split(":").map(Number);return h*60+m;};return f(a)-f(b);});
+    const ptsOf=x=>(mode0b==="gachi"||mode0b==="cocomo")?1:getFormationByMethod(x.ev.pos,formMethod,x.ev).list.length;
+    const avg=list.length?list.reduce((a,x)=>a+ptsOf(x),0)/list.length:0;
+    const sum=`全${list.length}レース`+(dls.length?` / 締切 ${dls[0]}〜${dls[dls.length-1]}`:"")+` / 平均${avg.toFixed(1)}点`;
+    t=t.replace(`【${head}】\n`,`【${head}】\n${sum}\n`);
   }
   t+=`\n\n---\n※推定1着率・フォーメーションは公開データ約4.7万レースで学習・較正したモデルによるものです(進入は枠なり想定)。`
    +`\n※展開予想は、推定1着率とコース別の決まり手実績(蓄積5.2万レース)を掛け合わせた参考値です。買い目選定の根拠としての検証はしていません。`
@@ -2333,7 +2344,7 @@ function computeP(base,W){
   for(let i=1;i<=6;i++) crs.push(parseInt(document.getElementById("crs"+i).value));
   for(let i=1;i<=6;i++){
     const c=crs[i-1];
-    const f=gv("f"+i),stE=predST(i,c)+.02*f;
+    const f=gv("f"+i),stE=predST(i,c)+fAdj(f);
     let s=W.N/100*1.0*(gv("nat"+i)-5)/2 + W.L/100*.6*(gv("loc"+i)-5)/2
         + W.M/100*.7*(gv("mot"+i)-35)/15 + W.B/100*.5*(gv("bot"+i)-30)/15
         + W.E/100*.6*(exMean-gv("exh"+i))/.15 + W.S/100*.7*(.16-stE)/.05
@@ -2797,13 +2808,13 @@ function leadMarketNote(lane){
   if(!mk) return `<br>市場の評価: 直前の3連単オッズを貼ると表示します(${lane}号艇の1着を市場が35%未満と見ていれば狙い目)`;
   const pc=mk.p*100;
   return `<br>市場の評価: ${lane}号艇の1着 <b>${pc.toFixed(1)}%</b>(${mk.src}から) → `
-    +(pc<35?`<b>狙い目</b>(35%未満のとき: 過去1年451レース・単勝131.5%)`:`優位なし(35%以上のとき: 過去1年335レース・単勝94.9%)`);
+    +(pc<35?`<b>狙い目</b>(35%未満のとき: 過去1年482レース・単勝132.8%)`:`優位なし(35%以上のとき: 過去1年365レース・単勝97.4%)`);
 }
 function checkLeadAlert(crs,behind){
   /* 「先行艇×捲り率」の形: 1コース以外のいずれかの艇が、1マークで他の5艇全員より2m以上前に出ており、
      かつその艇の登録選手が該当コースでの捲り率5%以上(走数10以上)の場合に通知する。
-     蓄積データでの検証(2〜5コース・確定オッズのある1年分): 単勝回収率115.9%(探索115.0%・検証117.2%、786レース)。
-     市場の評価(3連単オッズから見たこの艇の1着確率)が35%未満なら単勝131.5%(451レース)、35%以上なら94.9%(335レース)。
+     蓄積データでの検証(2〜5コース・確定オッズのある1年分): 単勝回収率117.6%(探索115.1%・検証121.0%、847レース・F持ちのST補正込み)。
+     市場の評価(3連単オッズから見たこの艇の1着確率)が35%未満なら単勝132.8%(482レース)、35%以上なら97.4%(365レース)。
      3連単(先行艇1着固定・PROGM確率上位4点・1点100円): 回収率112.9%(探索122.5%・検証99.2%、786レース)。
      ※3連単は14通りの買い方を試した中で良かったもの。単勝より不確か。
      6コースの先行艇は45レースで53.6%と弱いため対象外。ただし6コース除外は結果を見てから決めた条件なので、今後のデータで確認が必要。 */
@@ -2835,7 +2846,7 @@ function checkLeadAlert(crs,behind){
     el.style.display="";
     el.innerHTML=`<b>🔔 検証済みの形に該当</b> — ${best.c}コース(${best.lane}号艇)が1マークで他艇より${best.lead.toFixed(1)}m前に出ており、`
       +`このコースでの捲り率が${(best.makuri*100).toFixed(1)}%(5%以上)あります。`
-      +`単勝で狙える状況です(蓄積データでの検証: 2〜5コースの先行艇で単勝回収率115.9%・786レース)。`
+      +`単勝で狙える状況です(蓄積データでの検証: 2〜5コースの先行艇で単勝回収率117.6%・847レース)。`
       +leadMarketNote(best.lane)
       +(top4.length?`<br>3連単なら ${best.lane}号艇1着固定・モデル確率上位4点: <b>${top4.join(" / ")}</b>`
         +`(検証: 回収率112.9%・786レース。ただし2026年5月以降は99.2%で、単勝より不確か)`:"");
@@ -3197,14 +3208,14 @@ function makeComboNote(){
     if(b.dip) t+=`・跳ね上がり条件: ${b.lane}号艇(1コース)がスリットで外側の艇より${b.label.replace(/^外勢より|凹む$/g,"")}凹む隊形で、過去の実績ではイン1着率が約${b.rate}%に下がります(基準56.5%)。\n`;
     else t+=`・跳ね上がり条件: ${b.lane}号艇(${b.course}コース)「${b.label}」に該当。過去の実績で、このコースの1着率が${b.rate}%(このコースの平均の${b.idx}%)まで上がる条件です。\n`;
   });
-  if(c.lead&&c.leadMk) t+=`・市場の評価: 3連単オッズ(${c.leadMk.src})から見た先行艇の1着確率は${(c.leadMk.p*100).toFixed(1)}%。`+(c.leadMk.p<0.35?`35%未満で、過去1年の単勝は131.5%(451レース)でした。\n`:`35%以上で、過去1年の単勝は94.9%(335レース)と優位はありませんでした。\n`);
+  if(c.lead&&c.leadMk) t+=`・市場の評価: 3連単オッズ(${c.leadMk.src})から見た先行艇の1着確率は${(c.leadMk.p*100).toFixed(1)}%。`+(c.leadMk.p<0.35?`35%未満で、過去1年の単勝は132.8%(482レース)でした。\n`:`35%以上で、過去1年の単勝は97.4%(365レース)と優位はありませんでした。\n`);
   t+=`※買い目は総合判定(出走表のプール220%+票の動き)によるものです。検証済みパターンは展開の参考情報です。\n`;
   if(c.lead&&lm) t+=`※単勝で狙う場合は ${lm[2]}号艇(この形の検証は単勝で行っています)。\n`;
   t+=`\n■ 過去データでの検証値(参考)\n`;
   t+=`・プール220%(出走表のみ): 1年分54,734レースで回収率74.9%\n`;
   if(c.ohOk) t+=`・票の動きによる追加・除外: 約990レースで回収率約82%(同じレースでプール220%だけなら約74%)\n`;
   if(c.form) t+=`・④→⑤の形: 8,951レースで回収率約89.5%(月ごとの振れが大きい)\n`;
-  if(c.lead) t+=`・先行艇×捲り率(2〜5コース・捲り率5%以上): 単勝で786レース・回収率115.9%(探索115.0%・検証117.2%)。市場の評価が35%未満のときは451レース・131.5%、35%以上のときは335レース・94.9%。3連単のモデル確率上位4点は786レース・回収率112.9%(探索122.5%・検証99.2%。単勝より不確かです)。6コースの先行艇は実績が弱いため対象外にしています\n`;
+  if(c.lead) t+=`・先行艇×捲り率(2〜5コース・捲り率5%以上): 単勝で847レース・回収率117.6%(探索115.1%・検証121.0%)。市場の評価が35%未満のときは482レース・132.8%、35%以上のときは365レース・97.4%。3連単のモデル確率上位4点は786レース・回収率112.9%(探索122.5%・検証99.2%。単勝より不確かです)。6コースの先行艇は実績が弱いため対象外にしています\n`;
   if((c.boost||[]).length) t+=`・跳ね上がり条件: 蓄積約3.9万レースでの1着率の実績(回収率ではなく、1着になりやすさの指標です)\n`;
   t+=`\n※上記は過去データでの検証結果であり、今後の的中や利益を保証するものではありません。舟券の購入はご自身の判断と責任で、無理のない範囲でお楽しみください。\n`;
   t+=`※本予想は個人の分析によるもので、BOATRACE振興会・各施行者とは関係ありません。\n`;
@@ -3310,7 +3321,7 @@ function renderSlit(crs){
   const liveIdx=[0,1,2,3,4,5].filter(isLive);
   let exSum=0;liveIdx.forEach(i=>exSum+=gv("exh"+(i+1)));const exMean=exSum/(liveIdx.length||1)||6.8;
   const st=[],exA=[];
-  for(let i=1;i<=6;i++){const f=gv("f"+i);st.push(predST(i,crs[i-1])+.02*f);exA.push(Math.max(gv("exh"+i)||exMean,6));}
+  for(let i=1;i<=6;i++){const f=gv("f"+i);st.push(predST(i,crs[i-1])+fAdj(f));exA.push(Math.max(gv("exh"+i)||exMean,6));}
   const maxSt=Math.max(...liveIdx.map(i=>st[i])),minSt=Math.min(...liveIdx.map(i=>st[i]));
   const byCourse=[[],[],[],[],[],[]];
   crs.forEach((c,i)=>{ if(isLive(i)) byCourse[c-1].push(i); });
