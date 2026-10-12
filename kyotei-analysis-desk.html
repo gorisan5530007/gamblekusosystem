@@ -111,7 +111,7 @@ footer{margin-top:28px;font-size:12px;color:var(--faint);border-top:1px solid va
   <div id="comboLinks" style="font-size:12px;margin-bottom:8px"></div>
   <div class="row" style="gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:8px">
     <button class="primary" onclick="autoFetchCombo(false)">①②④を自動取得</button>
-    <button onclick="autoFetchCombo(true)">自動取得して判定</button> <span class="hint" style="font-size:11px;opacity:.6">自動取得 版2026-10-12b</span>
+    <button onclick="autoFetchCombo(true)">自動取得して判定</button> <span class="hint" style="font-size:11px;opacity:.6">自動取得 版2026-10-12c</span>
     <span class="msg" id="autoMsg" style="font-size:12px"></span>
     <details style="font-size:12px;width:100%"><summary style="cursor:pointer;color:var(--faint)">自動取得の設定(中継のURLと鍵)</summary>
       <div class="row" style="gap:6px;flex-wrap:wrap;align-items:center;margin-top:6px">
@@ -3062,7 +3062,13 @@ async function autoFetchCombo(andJudge){
   put("取得中…",true);
   const res={};
   for(const [k,id] of [["prog","comboProg"],["choku","comboChoku"],["odds","comboFinal"]]){
-    try{ const h=await get(U[k]); res[k]=/データがありません/.test(h)?"まだ出ていません":"ok";
+    document.getElementById(id).value="";   /* 前のレースの中身が残って別レースで判定しないよう、先に空にする */
+    try{ let h=null, err=null;
+      for(let i=0;i<3&&h===null;i++){   /* 公式サイトがときどき断るので、間をあけて3回まで */
+        try{ h=await get(U[k]); }catch(e){ err=e; if(!/断られ/.test(e.message)) break; put(`${{prog:"出走表",choku:"直前情報",odds:"直前オッズ"}[k]}: 断られたのでやり直し中…(${i+1}回目)`,true); await new Promise(r=>setTimeout(r,1500*(i+1))); }
+      }
+      if(h===null) throw err;
+      res[k]=/データがありません/.test(h)?"まだ出ていません":"ok";
       if(res[k]==="ok"){ const t=htmlToPasteText(h); document.getElementById(id).value=t;
         /* 中身の確認: 出走表はF数・平均STの並び、オッズは数字の表があるか */
         if(k==="prog"&&!/F\d+\s+L\d+\s+(0\.\d{2}|-)/.test(t.replace(/[\u3000\t]/g," "))) res[k]="取れましたが中身が読めません";
