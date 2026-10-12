@@ -3017,16 +3017,17 @@ function comboUrls(){
   const vCode=VENCODE[(document.getElementById("comboVenue")||{}).value];
   const rNo=(document.getElementById("comboRno")||{}).value, dRaw=(document.getElementById("comboDate2")||{}).value;
   if(!vCode||!rNo||!dRaw) return null;
-  const jcd=String(vCode).padStart(2,"0"), rn2=String(rNo).padStart(2,"0"), d=dRaw.replace(/-/g,"");
-  const b="https://www.boatrace.jp/owsp/sp/race/";
-  return {prog:`${b}racelist?rno=${rn2}&jcd=${jcd}&hd=${d}`, choku:`${b}beforeinfo?rno=${rn2}&jcd=${jcd}&hd=${d}`, odds:`${b}odds3t?rno=${rn2}&jcd=${jcd}&hd=${d}`};
+  const jcd=String(vCode).padStart(2,"0"), rn=String(+rNo), d=dRaw.replace(/-/g,"");
+  /* スマホ版のページは中身を後から読み込むため、取ってきても表が入っていない。表が最初から入っているパソコン版を取る */
+  const b="https://www.boatrace.jp/owpc/pc/race/";
+  return {prog:`${b}racelist?rno=${rn}&jcd=${jcd}&hd=${d}`, choku:`${b}beforeinfo?rno=${rn}&jcd=${jcd}&hd=${d}`, odds:`${b}odds3t?rno=${rn}&jcd=${jcd}&hd=${d}`};
 }
 /* 取ってきたHTMLを、画面に出したときの文字(コピーしたときに近い形)にする。画像や外部ファイルは読み込まない */
 function htmlToPasteText(html){
   const clean=html.replace(/<script[\s\S]*?<\/script>/gi,"").replace(/<style[\s\S]*?<\/style>/gi,"").replace(/<link[^>]*>/gi,"")
     .replace(/<img([^>]*?)\ssrc=/gi,"<img$1 data-src=");
   const box=document.createElement("div");
-  box.style.cssText="position:absolute;left:-99999px;top:0;width:420px;";
+  box.style.cssText="position:absolute;left:-99999px;top:0;width:1280px;";
   const doc=new DOMParser().parseFromString(clean,"text/html");
   box.append(...Array.from(doc.body.childNodes));
   document.body.appendChild(box);
@@ -3046,11 +3047,17 @@ async function autoFetchCombo(andJudge){
   put("取得中…",true);
   const res={};
   for(const [k,id] of [["prog","comboProg"],["choku","comboChoku"],["odds","comboFinal"]]){
-    try{ const h=await get(U[k]); res[k]=/データがありません/.test(h)?"まだ出ていません":"ok"; if(res[k]==="ok") document.getElementById(id).value=htmlToPasteText(h); }
+    try{ const h=await get(U[k]); res[k]=/データがありません/.test(h)?"まだ出ていません":"ok";
+      if(res[k]==="ok"){ const t=htmlToPasteText(h); document.getElementById(id).value=t;
+        /* 中身の確認: 出走表はF数・平均STの並び、オッズは数字の表があるか */
+        if(k==="prog"&&!/F\d+\s+L\d+\s+(0\.\d{2}|-)/.test(t.replace(/[\u3000\t]/g," "))) res[k]="取れましたが中身が読めません";
+        if(k==="odds"&&!/\d+\.\d/.test(t)) res[k]="まだ出ていません";
+      } }
     catch(e){ res[k]=e.message; }
   }
   const lab={prog:"出走表",choku:"直前情報",odds:"直前オッズ"};
   const okAll=res.prog==="ok";
+  window.__lastAuto=res;
   put(Object.keys(res).map(k=>`${lab[k]}: ${res[k]==="ok"?"取得しました":res[k]}`).join(" / ")+` (${new Date().toLocaleTimeString("ja-JP",{hour:"2-digit",minute:"2-digit",second:"2-digit"})})`,okAll);
   if(andJudge && okAll) runComboJudge();
 }
