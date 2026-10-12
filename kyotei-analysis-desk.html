@@ -958,7 +958,9 @@ function extractConditions(t){
     }
     if(idx!==-1&&idx<bi){bi=idx;best=k;}
   }
-  if(best){document.getElementById("venue").value=best;out.push("開催場→"+best);}
+  const lk=window.__lockRace;   /* 総合判断で会場を選んでいるときは、そちらを優先(ページ内のメニューに他の会場名もあるため) */
+  if(lk&&lk.v){document.getElementById("venue").value=lk.v;out.push("開催場→"+lk.v);}
+  else if(best){document.getElementById("venue").value=best;out.push("開催場→"+best);}
   const w=t.match(/風速[\s:]*([0-9]+(?:\.[0-9]+)?)\s*m/);
   if(w){document.getElementById("wspd").value=w[1];out.push("風速→"+w[1]+"m");}
   const wv=t.match(/波高?[\s:]*([0-9]+(?:\.[0-9]+)?)\s*cm/);
@@ -1026,9 +1028,12 @@ function parseSyussou(){
   const dm=t.match(/[ＨH]\s*(1200|1800)\s*ｍ|[ＨH]\s*(1200|1800)m/);
   if(dm){const v=dm[1]||dm[2]; document.getElementById("dist").value=v;}
   const rm=t.match(/(\d{1,2})\s*R\s*[　\s]*(?:締切|レース)/)||t.match(/^\s*(\d{1,2})R/m);
-  if(rm){const v=+rm[1]; if(v>=1&&v<=12)document.getElementById("rno").value=String(v);}
+  if(window.__lockRace&&window.__lockRace.r) document.getElementById("rno").value=String(+window.__lockRace.r);   /* 総合判断で選んだRを優先(ページ内に1R〜12Rの切り替えがあるため) */
+  else if(rm){const v=+rm[1]; if(v>=1&&v<=12)document.getElementById("rno").value=String(v);}
   { /* レース種別(予選・選抜・優勝戦・進入固定など)。締切や「R」の近くにある語を拾う */
-    const rm2=t.match(/\d{1,2}\s*R[\s\S]{0,80}?(進入固定|ドリーム|準優|優勝戦|選抜|特選|特賞|一般|予選)/);
+    const lr=window.__lockRace&&window.__lockRace.r?+window.__lockRace.r:null;
+    const rm2=lr?(t.match(new RegExp("(?:^|[^\\d])"+lr+"\\s*R[\\s\\S]{0,40}?(進入固定|ドリーム|準優|優勝戦|選抜|特選|特賞|一般|予選)"))||t.match(/\d{1,2}\s*R[\s\S]{0,80}?(進入固定|ドリーム|準優|優勝戦|選抜|特選|特賞|一般|予選)/))
+      :t.match(/\d{1,2}\s*R[\s\S]{0,80}?(進入固定|ドリーム|準優|優勝戦|選抜|特選|特賞|一般|予選)/);
     const rt=rm2?rm2[1]:null, sel=document.getElementById("raceType");
     if(rt&&sel) sel.value=rt;
   }
@@ -3103,6 +3108,8 @@ function runComboJudge(){
   const cv=document.getElementById("comboVenue").value, cr=document.getElementById("comboRno").value;
   if(cv) document.getElementById("venue").value=cv;
   if(cr) document.getElementById("rno").value=cr;
+  window.__lockRace={v:cv||null,r:cr||null};   /* 貼り付けた文字から読んだ会場・Rより、ここで選んだものを優先する */
+  setTimeout(()=>{ window.__lockRace=null; },0);
   const isOk=id=>{const e=document.getElementById(id); return !!e && /\bok\b/.test(e.className);};
   const txtOf=id=>{const e=document.getElementById(id); return e?e.textContent:"";};
   const status=[];   /* [名前, 状態("ok"|"warn"|"ng"|"none"), 説明] */
