@@ -111,7 +111,7 @@ footer{margin-top:28px;font-size:12px;color:var(--faint);border-top:1px solid va
   <div id="comboLinks" style="font-size:12px;margin-bottom:8px"></div>
   <div class="row" style="gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:8px">
     <button class="primary" onclick="autoFetchCombo(false)">①②④を自動取得</button>
-    <button onclick="autoFetchCombo(true)">自動取得して判定</button>
+    <button onclick="autoFetchCombo(true)">自動取得して判定</button> <span class="hint" style="font-size:11px;opacity:.6">自動取得 版2026-10-12b</span>
     <span class="msg" id="autoMsg" style="font-size:12px"></span>
     <details style="font-size:12px;width:100%"><summary style="cursor:pointer;color:var(--faint)">自動取得の設定(中継のURLと鍵)</summary>
       <div class="row" style="gap:6px;flex-wrap:wrap;align-items:center;margin-top:6px">
@@ -3048,7 +3048,17 @@ async function autoFetchCombo(andJudge){
   if(!pu){ put("先に「自動取得の設定」で中継のURLと鍵を入れてください",false); document.querySelector("#autoMsg + details")?.setAttribute("open",""); return; }
   const U=comboUrls(); if(!U){ put("会場・R・開催日を選んでください",false); return; }
   saveProxy();
-  const get=async url=>{ const r=await fetch(`${pu}/?key=${encodeURIComponent(pk)}&url=${encodeURIComponent(url)}`); if(!r.ok) throw new Error(r.status===403?"鍵が違うか、許可されていないページです":"取得に失敗しました("+r.status+")"); return r.text(); };
+  const get=async url=>{
+    let r;
+    try{ r=await fetch(`${pu}/?key=${encodeURIComponent(pk)}&url=${encodeURIComponent(url)}&t=${Date.now()}`,{cache:"no-store"}); }
+    catch(e){ throw new Error("中継につながりません(URLを確認)"); }
+    const up=r.headers.get("X-Upstream-Status"), ver=r.headers.get("X-Proxy-Version");
+    if(r.status===401) throw new Error("鍵が違います");
+    if(r.status===502) throw new Error("公式サイトに断られました("+(up||"?")+")。少し待ってもう一度");
+    if(!r.ok) throw new Error(ver?("取得に失敗しました("+r.status+")"):("取得に失敗しました("+r.status+")。中継が古い版です。kyotei-proxy-worker.js を貼り直してください"));
+    const fin=r.headers.get("X-Final-Url")||"";
+    if(/\/owsp\//.test(fin)) throw new Error("スマホ版に転送されました。中継を新しい版に貼り直してください");
+    return r.text(); };
   put("取得中…",true);
   const res={};
   for(const [k,id] of [["prog","comboProg"],["choku","comboChoku"],["odds","comboFinal"]]){
