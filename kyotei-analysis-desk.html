@@ -157,6 +157,10 @@ footer{margin-top:28px;font-size:12px;color:var(--faint);border-top:1px solid va
     <span class="msg" id="comboMsg" style="font-size:12px"></span>
   </div>
   <div id="comboOut" style="margin-top:10px"></div>
+  <details id="m1Box" open style="display:none;margin-top:12px"><summary style="cursor:pointer;font-weight:600">1マーク判定(展開アニメーション)</summary>
+    <p class="hint" style="font-size:11px;margin:4px 0">出走表・直前情報・直前オッズから、スタートから1マークまでの動きを物理計算で描きます(水面図・不良航法・引き波込み)。買い/見送りは1マーク判定の検証済みの条件です。</p>
+    <iframe id="m1Frame" title="1マーク判定" style="width:100%;height:900px;border:0;border-radius:8px;background:transparent" loading="lazy"></iframe>
+  </details>
   <div id="comboNoteBox" style="display:none;margin-top:12px;border-top:1px solid var(--line,#2a3440);padding-top:10px">
     <h3 style="margin:0 0 6px;font-size:14px">note有料予想の記事</h3>
     <div class="row" style="gap:6px;flex-wrap:wrap;align-items:center">
@@ -3150,6 +3154,25 @@ ${W.b1!=null?`<text x="${sx(300)-4}" y="${sy(-W.b1)-5}" font-size="11" fill="cur
   h+=`</table>`;
   body.innerHTML=h.replace(/<table>/g,'<div style="overflow-x:auto"><table>').replace(/<\/table>/g,'</table></div>');
 }
+
+/* ---------- 1マーク判定(別ファイル kyotei-1mark.html を中に表示して、貼った内容を渡す) ---------- */
+let M1READY=false, M1PEND=null;
+window.addEventListener("message",e=>{ const d=e.data||{};
+  if(d.type==="kyotei1m-ready"){ M1READY=true; if(M1PEND){ e.source.postMessage(M1PEND,"*"); M1PEND=null; } }
+  if(d.type==="kyotei1m-h"){ const f=document.getElementById("m1Frame"); if(f) f.style.height=Math.max(400,Math.min(4000,d.h+20))+"px"; } });
+function send1M(){
+  const prog=document.getElementById("comboProg").value.trim(), choku=document.getElementById("comboChoku").value.trim();
+  const box=document.getElementById("m1Box"), f=document.getElementById("m1Frame");
+  if(!box||!f||!prog||!choku){ if(box) box.style.display="none"; return; }
+  const v=(document.getElementById("comboVenue")||{}).value||"";
+  const msg={type:"kyotei1m",prog,choku,odds:document.getElementById("comboFinal").value.trim(),venue:v,
+    rno:(document.getElementById("comboRno")||{}).value||"",date:(document.getElementById("comboDate2")||{}).value||"",
+    night:["桐生","蒲郡","住之江","丸亀","下関","若松","大村"].includes(v)};
+  box.style.display="";
+  if(!f.getAttribute("src")){ M1READY=false; M1PEND=msg; f.setAttribute("src","kyotei-1mark.html?embed=1"); return; }
+  if(M1READY) f.contentWindow.postMessage(msg,"*"); else M1PEND=msg;
+}
+{ const _rcj=runComboJudge; runComboJudge=function(){ const r=_rcj.apply(this,arguments); try{ send1M(); }catch(e){} return r; }; }
 function renderComboLinks(){
   const el=document.getElementById("comboLinks");
   if(!el) return;
