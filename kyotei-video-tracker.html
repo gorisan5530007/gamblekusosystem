@@ -1,0 +1,253 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>1マーク動き記録</title>
+<style>
+:root{--bg:#0B1522;--panel:#122033;--field:#0E1A2A;--line:rgba(148,180,210,.18);--text:#E6EDF6;--faint:#8FA6C2;--acc:#3D82F0;--warn:#F6C35B;}
+@media (prefers-color-scheme: light){:root:not([data-theme="dark"]){--bg:#F4F7FB;--panel:#FFFFFF;--field:#F0F4F9;--line:rgba(30,60,100,.15);--text:#13243B;--faint:#5A6F8A;}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font-family:"BIZ UDPGothic","Hiragino Sans","Noto Sans JP",sans-serif;font-size:14px;line-height:1.6}
+main{max-width:1100px;margin:0 auto;padding:12px 16px 40px}
+h1{font-size:18px;margin:6px 0 2px}
+.sub{color:var(--faint);font-size:12px;margin:0 0 10px}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin-top:12px}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+input,select,button{font:inherit;color:var(--text);background:var(--field);border:1px solid var(--line);border-radius:6px;padding:6px 9px;min-height:36px}
+input[type=text]{flex:1;min-width:220px}
+button{cursor:pointer}
+button.p{background:var(--acc);border-color:var(--acc);color:#fff;font-weight:700}
+button[aria-pressed=true]{outline:2px solid var(--acc)}
+.stage{position:relative;width:100%;aspect-ratio:16/9;background:#000;border-radius:8px;overflow:hidden;margin-top:10px}
+#yt,#vid{position:absolute;inset:0;width:100%;height:100%}
+#vid{display:none;object-fit:contain;background:#000}
+#ov{position:absolute;inset:0;width:100%;height:100%;cursor:crosshair}
+#ov.off{pointer-events:none;cursor:default}
+.boats button{width:44px;font-weight:700}
+.b1{background:#F5F7FA!important;color:#111!important}.b2{background:#1F1F1F!important;color:#fff!important}.b3{background:#E0402F!important;color:#fff!important}
+.b4{background:#2F72E0!important;color:#fff!important}.b5{background:#F2C52E!important;color:#111!important}.b6{background:#2FA35A!important;color:#fff!important}
+.msg{font-size:13px;color:var(--faint);margin-top:6px}
+.msg b{color:var(--warn)}
+table{border-collapse:collapse;width:100%;font-size:12px;font-variant-numeric:tabular-nums}
+td,th{border-bottom:1px solid var(--line);padding:4px 6px;text-align:right;white-space:nowrap}
+th:first-child,td:first-child{text-align:left}
+.scroll{overflow-x:auto}
+details summary{cursor:pointer;color:var(--faint)}
+.time{font-variant-numeric:tabular-nums;font-weight:700;min-width:80px;display:inline-block}
+.note{font-size:12px;color:var(--faint)}
+</style>
+</head>
+<body>
+<main>
+<h1>1マーク動き記録</h1>
+<p class="sub">レース映像を0.2秒ずつ進めながら各艇をタップして位置を記録し、1マークの動きをデータにするツール。YouTubeは公式の埋め込みプレーヤーで再生します(ダウンロードはしません)。</p>
+
+<section class="panel">
+  <div class="row">
+    <input type="text" id="url" placeholder="YouTubeのURL(https://youtu.be/… など)">
+    <button class="p" id="loadYt">読み込む</button>
+    <label class="note">または動画ファイル <input type="file" id="file" accept="video/*" style="min-height:auto"></label>
+  </div>
+  <div class="row" style="margin-top:8px">
+    <label>会場 <select id="venue"></select></label>
+    <label>日付 <input type="date" id="date"></label>
+    <label>R <select id="rno"></select></label>
+    <label>開始の目安(秒) <input type="number" id="t0" step="0.1" style="width:90px" title="スタートの瞬間の動画の時刻。入れると記録の時刻がスタートからの秒数になります"></label>
+    <button id="setT0">いまの時刻をスタートにする</button>
+  </div>
+</section>
+
+<div class="stage" id="stage">
+  <div id="yt"></div>
+  <video id="vid" playsinline></video>
+  <canvas id="ov"></canvas>
+</div>
+
+<section class="panel">
+  <div class="row">
+    <span class="time" id="tm">0.00s</span>
+    <button id="bm1">−1秒</button><button id="bm02">−0.2秒</button>
+    <button id="play">▶ 再生</button>
+    <button id="bp02">+0.2秒</button><button id="bp1">+1秒</button>
+    <label>速さ <select id="rate"><option>0.25</option><option>0.5</option><option selected>1</option></select></label>
+    <label><input type="checkbox" id="rec" checked style="min-height:auto"> 記録モード(画面タップで記録)</label>
+  </div>
+  <div class="row boats" style="margin-top:8px">
+    <span class="note">記録する艇:</span>
+    <button class="b1" data-b="1">1</button><button class="b2" data-b="2">2</button><button class="b3" data-b="3">3</button>
+    <button class="b4" data-b="4">4</button><button class="b5" data-b="5">5</button><button class="b6" data-b="6">6</button>
+    <label class="note"><input type="checkbox" id="auto" checked style="min-height:auto"> 6艇記録したら自動で+0.2秒</label>
+    <button id="undo">1つ戻す</button>
+  </div>
+  <div class="msg" id="msg">URLを入れて「読み込む」。動画が出たら、まず下の「基準点」を合わせてください。</div>
+</section>
+
+<section class="panel">
+  <details open>
+    <summary>基準点(画面上の位置をメートルに直すため。最初に1回だけ)</summary>
+    <p class="note">映像の中で場所が分かる点を4つタップし、その点の水面上の位置(m)を入れます。x = スタートラインからの距離(1マークは150m)、y = ブイの線からスタンド側への距離。迷ったら初期値のままで構いません(だいたいの目安になります)。カメラが動く映像では、カメラが止まっている場面で記録してください。</p>
+    <div class="scroll"><table id="calT"><tr><th>基準点</th><th>x(m)</th><th>y(m)</th><th>画面</th><th></th></tr></table></div>
+    <div class="row" style="margin-top:6px">
+      <button id="calLen">艇の長さを測る(艇首→艇尾を2回タップ)</button>
+      <span class="note" id="lenInfo">艇の長さ: 未設定(基準点の合い具合の確認用)</span>
+    </div>
+  </details>
+</section>
+
+<section class="panel">
+  <div class="row" style="justify-content:space-between">
+    <b>記録</b>
+    <div class="row">
+      <button id="csv">CSVで保存</button><button id="json">JSONで保存</button>
+      <label class="note">JSONを読み込む <input type="file" id="imp" accept=".json,application/json" style="min-height:auto"></label>
+      <button id="clear">全部消す</button>
+    </div>
+  </div>
+  <div class="scroll" style="margin-top:8px"><table id="sumT"></table></div>
+  <p class="note">まとめ: 1マークへの最接近 = ブイに一番近づいた距離(旋回の半径の目安)/ 切り込み開始 = 内へ寄り始めたx(m)/ 速さ = 記録点の間の平均(m/秒)/ 1M通過 = x=150mを越えた時刻。基準点が4つそろうとメートルで出ます。</p>
+  <details><summary>記録の一覧</summary><div class="scroll"><table id="ptT"></table></div></details>
+</section>
+</main>
+
+<script>
+const VEN=["桐生","戸田","江戸川","平和島","多摩川","浜名湖","蒲郡","常滑","津","三国","びわこ","住之江","尼崎","鳴門","丸亀","児島","宮島","徳山","下関","若松","芦屋","福岡","唐津","大村"];
+const COL={1:"#F5F7FA",2:"#1F1F1F",3:"#E0402F",4:"#2F72E0",5:"#F2C52E",6:"#2FA35A"};
+const $=id=>document.getElementById(id);
+$("venue").innerHTML=`<option value="">—</option>`+VEN.map((v,i)=>`<option value="${i+1}">${v}</option>`).join("");
+$("rno").innerHTML=`<option value="">—</option>`+Array.from({length:12},(_,i)=>`<option>${i+1}</option>`).join("");
+$("date").value=new Date().toLocaleDateString("sv-SE");
+
+/* ---------- 状態 ---------- */
+const CAL_DEF=[{n:"1マークのブイ",x:150,y:0},{n:"スタートライン×ブイの線",x:0,y:0},{n:"スタートライン上のスタンド側の目印",x:0,y:40},{n:"1マーク真横のスタンド側の目印",x:150,y:40}];
+let S={src:null,pts:[],cal:CAL_DEF.map(c=>({...c,u:null,v:null})),len:null,t0:null};
+let cur=1, mode="rec", pendLen=[], calIdx=-1, player=null, kind=null, ytReady=false;
+const key=()=>"vtrack:"+(S.src||"");
+function save(){ try{ if(S.src) localStorage.setItem(key(),JSON.stringify(S)); }catch(e){} }
+function load(){ try{ const v=JSON.parse(localStorage.getItem(key())||"null"); if(v&&v.pts){ S={...S,...v,src:S.src}; } }catch(e){} }
+const msg=(t)=>{ $("msg").innerHTML=t; };
+
+/* ---------- プレーヤー ---------- */
+function ytId(u){ const m=String(u).match(/(?:youtu\.be\/|v=|\/embed\/|\/shorts\/|\/live\/)([A-Za-z0-9_-]{11})/); return m?m[1]:null; }
+window.onYouTubeIframeAPIReady=()=>{ ytReady=true; };
+(function(){ const s=document.createElement("script"); s.src="https://www.youtube.com/iframe_api"; document.head.appendChild(s); })();
+$("loadYt").onclick=()=>{
+  const id=ytId($("url").value); if(!id){ msg("<b>YouTubeのURLが読めませんでした</b>"); return; }
+  if(!ytReady||!window.YT||!YT.Player){ msg("YouTubeのプレーヤーを準備中です。数秒待ってもう一度押してください"); return; }
+  $("vid").style.display="none"; $("yt").style.display="";
+  kind="yt"; S.src="yt:"+id; S.pts=[]; S.t0=null; load();
+  if(player&&player.loadVideoById){ player.cueVideoById(id); }
+  else { player=new YT.Player("yt",{videoId:id,playerVars:{playsinline:1,rel:0,modestbranding:1,controls:0},events:{onReady:()=>{ msg("読み込みました。基準点 → 各艇の記録 の順に進めてください"); setRate(); }}}); }
+  afterLoad();
+};
+$("file").onchange=e=>{
+  const f=e.target.files[0]; if(!f) return;
+  if(player&&player.pauseVideo) player.pauseVideo();
+  const v=$("vid"); v.src=URL.createObjectURL(f); v.style.display="block"; $("yt").style.display="none";
+  kind="file"; S.src="file:"+f.name+":"+f.size; S.pts=[]; S.t0=null; load(); afterLoad(); msg("動画ファイルを読み込みました");
+};
+function afterLoad(){ $("t0").value=S.t0??""; renderCal(); renderAll(); }
+const now=()=>kind==="yt"&&player&&player.getCurrentTime?player.getCurrentTime():(kind==="file"?$("vid").currentTime:0);
+function seek(t){ t=Math.max(0,t); if(kind==="yt"&&player&&player.seekTo){ player.seekTo(t,true); player.pauseVideo(); } else if(kind==="file"){ $("vid").currentTime=t; $("vid").pause(); } setTimeout(draw,180); }
+function playing(){ return kind==="yt"&&player&&player.getPlayerState?player.getPlayerState()===1:(kind==="file"?!$("vid").paused:false); }
+$("play").onclick=()=>{ if(playing()){ kind==="yt"?player.pauseVideo():$("vid").pause(); } else { kind==="yt"?player.playVideo():$("vid").play(); } };
+const step=d=>()=>seek(now()+d);
+$("bm1").onclick=step(-1); $("bm02").onclick=step(-0.2); $("bp02").onclick=step(0.2); $("bp1").onclick=step(1);
+function setRate(){ const r=+$("rate").value; if(kind==="yt"&&player&&player.setPlaybackRate) player.setPlaybackRate(r); if(kind==="file") $("vid").playbackRate=r; }
+$("rate").onchange=setRate;
+$("setT0").onclick=()=>{ S.t0=+now().toFixed(2); $("t0").value=S.t0; save(); renderAll(); };
+$("t0").onchange=()=>{ const v=parseFloat($("t0").value); S.t0=isFinite(v)?v:null; save(); renderAll(); };
+setInterval(()=>{ const t=now(); $("tm").textContent=t.toFixed(2)+"s"+(S.t0!=null?` (スタート${t-S.t0>=0?"+":""}${(t-S.t0).toFixed(2)})`:""); $("play").textContent=playing()?"❚❚ 止める":"▶ 再生"; if(playing()) draw(); },120);
+
+/* ---------- 艇の選択 ---------- */
+document.querySelectorAll(".boats button[data-b]").forEach(b=>b.onclick=()=>{ cur=+b.dataset.b; mode="rec"; markBoat(); });
+function markBoat(){ document.querySelectorAll(".boats button[data-b]").forEach(b=>b.setAttribute("aria-pressed",+b.dataset.b===cur&&mode==="rec")); }
+markBoat();
+document.addEventListener("keydown",e=>{ if(e.target.tagName==="INPUT"&&e.target.type!=="checkbox") return;
+  if(/^[1-6]$/.test(e.key)){ cur=+e.key; mode="rec"; markBoat(); }
+  if(e.key==="ArrowRight") seek(now()+0.2); if(e.key==="ArrowLeft") seek(now()-0.2);
+  if(e.key===" "){ e.preventDefault(); $("play").click(); } });
+$("rec").onchange=()=>$("ov").classList.toggle("off",!$("rec").checked);
+
+/* ---------- 画面タップ ---------- */
+const ov=$("ov");
+function fit(){ const r=ov.getBoundingClientRect(), d=Math.min(2,devicePixelRatio||1); ov.width=r.width*d; ov.height=r.height*d; draw(); }
+new ResizeObserver(fit).observe($("stage"));
+ov.addEventListener("click",e=>{
+  if(!S.src){ msg("<b>先に動画を読み込んでください</b>"); return; }
+  const r=ov.getBoundingClientRect(), u=(e.clientX-r.left)/r.width, v=(e.clientY-r.top)/r.height;   /* 画面に対する割合で持つ(大きさが変わってもずれない) */
+  if(mode==="cal"&&calIdx>=0){ S.cal[calIdx].u=u; S.cal[calIdx].v=v; mode="rec"; calIdx=-1; markBoat(); save(); renderCal(); draw(); msg("基準点を記録しました"); return; }
+  if(mode==="len"){ pendLen.push([u,v]); if(pendLen.length===2){ S.len=pendLen.slice(); pendLen=[]; mode="rec"; markBoat(); save(); renderCal(); msg("艇の長さを記録しました"); } else msg("次に艇尾をタップ"); draw(); return; }
+  const t=+now().toFixed(2);
+  S.pts=S.pts.filter(p=>!(p.b===cur&&Math.abs(p.t-t)<0.05));   /* 同じ時刻・同じ艇は上書き */
+  S.pts.push({t,b:cur,u,v}); S.pts.sort((a,b)=>a.t-b.t||a.b-b.b); save();
+  const done=new Set(S.pts.filter(p=>Math.abs(p.t-t)<0.05).map(p=>p.b));
+  const next=[1,2,3,4,5,6].find(b=>!done.has(b)&&b>cur)??[1,2,3,4,5,6].find(b=>!done.has(b));
+  if(next){ cur=next; markBoat(); } else if($("auto").checked){ cur=1; markBoat(); seek(t+0.2); }
+  renderAll(); draw();
+});
+$("undo").onclick=()=>{ const t=now(); let k=-1,bd=1e9; S.pts.forEach((p,i)=>{ const d=Math.abs(p.t-t); if(d<bd){bd=d;k=i;} }); if(k>=0){ cur=S.pts[k].b; S.pts.splice(k,1); markBoat(); save(); renderAll(); draw(); } };
+$("calLen").onclick=()=>{ mode="len"; pendLen=[]; markBoat(); msg("艇首をタップ → 艇尾をタップ"); };
+
+/* ---------- 基準点(射影変換) ---------- */
+function renderCal(){
+  $("calT").innerHTML=`<tr><th>基準点</th><th>x(m)</th><th>y(m)</th><th>画面</th><th></th></tr>`+S.cal.map((c,i)=>`<tr><td>${i+1}. <input value="${c.n}" data-i="${i}" data-k="n" style="min-width:180px"></td><td><input type="number" value="${c.x}" data-i="${i}" data-k="x" style="width:76px"></td><td><input type="number" value="${c.y}" data-i="${i}" data-k="y" style="width:76px"></td><td>${c.u==null?"未":"済"}</td><td><button data-c="${i}">タップして合わせる</button></td></tr>`).join("");
+  $("calT").querySelectorAll("input").forEach(inp=>inp.onchange=()=>{ const c=S.cal[+inp.dataset.i]; c[inp.dataset.k]=inp.dataset.k==="n"?inp.value:parseFloat(inp.value); save(); renderAll(); });
+  $("calT").querySelectorAll("button[data-c]").forEach(b=>b.onclick=()=>{ calIdx=+b.dataset.c; mode="cal"; markBoat(); msg(`映像の中の「${S.cal[calIdx].n}」をタップ`); });
+  $("lenInfo").textContent=S.len?`艇の長さ: 設定済み(画面上 ${(Math.hypot(S.len[0][0]-S.len[1][0],S.len[0][1]-S.len[1][1])*100).toFixed(1)}%幅)`:"艇の長さ: 未設定";
+}
+function solve(A,b){ const n=b.length; A=A.map((r,i)=>[...r,b[i]]);
+  for(let c=0;c<n;c++){ let p=c; for(let r=c+1;r<n;r++) if(Math.abs(A[r][c])>Math.abs(A[p][c])) p=r; [A[c],A[p]]=[A[p],A[c]]; if(Math.abs(A[c][c])<1e-12) return null;
+    for(let r=0;r<n;r++){ if(r===c) continue; const f=A[r][c]/A[c][c]; for(let k=c;k<=n;k++) A[r][k]-=f*A[c][k]; } }
+  return A.map((r,i)=>r[n]/r[i]); }
+function homog(){ const c=S.cal.filter(q=>q.u!=null&&isFinite(q.x)&&isFinite(q.y)); if(c.length<4) return null;
+  const A=[],b=[]; c.slice(0,4).forEach(q=>{ const {u,v,x,y}=q; A.push([u,v,1,0,0,0,-u*x,-v*x]); b.push(x); A.push([0,0,0,u,v,1,-u*y,-v*y]); b.push(y); });
+  const h=solve(A,b); return h?[...h,1]:null; }
+function toM(H,u,v){ const w=H[6]*u+H[7]*v+1; return [(H[0]*u+H[1]*v+H[2])/w,(H[3]*u+H[4]*v+H[5])/w]; }
+
+/* ---------- 描画 ---------- */
+function draw(){
+  const g=ov.getContext("2d"), W=ov.width, Hh=ov.height; g.clearRect(0,0,W,Hh);
+  const t=now(), d=Math.min(2,devicePixelRatio||1);
+  S.cal.forEach((c,i)=>{ if(c.u==null) return; g.strokeStyle="#FF3B30"; g.lineWidth=2*d; g.beginPath(); g.arc(c.u*W,c.v*Hh,7*d,0,7); g.stroke(); g.fillStyle="#FF3B30"; g.font=`${11*d}px sans-serif`; g.fillText(String(i+1),c.u*W+9*d,c.v*Hh-6*d); });
+  if(S.len){ g.strokeStyle="#F6C35B"; g.lineWidth=2*d; g.beginPath(); g.moveTo(S.len[0][0]*W,S.len[0][1]*Hh); g.lineTo(S.len[1][0]*W,S.len[1][1]*Hh); g.stroke(); }
+  for(let b=1;b<=6;b++){ const ps=S.pts.filter(p=>p.b===b&&p.t<=t+0.05); if(!ps.length) continue;
+    g.strokeStyle=COL[b]; g.globalAlpha=.55; g.lineWidth=2.5*d; g.beginPath(); ps.forEach((p,i)=>i?g.lineTo(p.u*W,p.v*Hh):g.moveTo(p.u*W,p.v*Hh)); g.stroke(); g.globalAlpha=1;
+    const last=ps[ps.length-1], here=Math.abs(last.t-t)<0.05;
+    g.fillStyle=COL[b]; g.strokeStyle=here?"#fff":"rgba(0,0,0,.6)"; g.lineWidth=(here?2.5:1.5)*d;
+    g.beginPath(); g.arc(last.u*W,last.v*Hh,(here?8:5)*d,0,7); g.fill(); g.stroke();
+    if(here){ g.fillStyle=b===1||b===5?"#111":"#fff"; g.font=`700 ${10*d}px sans-serif`; g.textAlign="center"; g.textBaseline="middle"; g.fillText(String(b),last.u*W,last.v*Hh); g.textAlign="left"; g.textBaseline="alphabetic"; } }
+}
+
+/* ---------- まとめと保存 ---------- */
+function rows(){ const H=homog(), t0=S.t0??0, V=$("venue").value?VEN[+$("venue").value-1]:"";
+  return S.pts.map(p=>{ const m=H?toM(H,p.u,p.v):[null,null]; return {venue:V,date:$("date").value,rno:$("rno").value,t:+(p.t-t0).toFixed(2),video_t:p.t,boat:p.b,u:+p.u.toFixed(4),v:+p.v.toFixed(4),x_m:m[0]==null?"":+m[0].toFixed(1),y_m:m[1]==null?"":+m[1].toFixed(1)}; }); }
+function renderAll(){
+  const R=rows(), H=homog();
+  $("ptT").innerHTML=`<tr><th>時刻(スタート基準)</th><th>艇</th><th>x(m)</th><th>y(m)</th><th>画面(横,縦)</th></tr>`+R.map(r=>`<tr><td>${r.t.toFixed(2)}</td><td>${r.boat}</td><td>${r.x_m}</td><td>${r.y_m}</td><td>${r.u}, ${r.v}</td></tr>`).join("");
+  const by=b=>R.filter(r=>r.boat===b);
+  let h=`<tr><th>艇</th><th>記録数</th><th>1マークへの最接近</th><th>切り込み開始x</th><th>速さ(平均)</th><th>1M通過</th></tr>`;
+  for(let b=1;b<=6;b++){ const a=by(b); if(!a.length) continue;
+    let near="-",cut="-",sp="-",pass="-";
+    if(H&&a.length>=2){ const m=a.map(r=>[r.t,+r.x_m,+r.y_m]);
+      near=Math.min(...m.map(q=>Math.hypot(q[1]-150,q[2]))).toFixed(1)+"m";
+      for(let i=1;i<m.length;i++){ const dy=(m[i][2]-m[i-1][2])/((m[i][0]-m[i-1][0])||1); if(m[i][1]>0&&dy<-1.5){ cut=m[i-1][1].toFixed(0)+"m"; break; } }
+      let D=0,T=0; for(let i=1;i<m.length;i++){ D+=Math.hypot(m[i][1]-m[i-1][1],m[i][2]-m[i-1][2]); T+=m[i][0]-m[i-1][0]; } if(T>0) sp=(D/T).toFixed(1)+"m/秒("+(D/T*3.6).toFixed(0)+"km/h)";
+      for(let i=1;i<m.length;i++){ if(m[i-1][1]<150&&m[i][1]>=150){ const u=(150-m[i-1][1])/(m[i][1]-m[i-1][1]); pass=(m[i-1][0]+u*(m[i][0]-m[i-1][0])).toFixed(2)+"秒"; break; } } }
+    h+=`<tr><td><span style="display:inline-block;width:12px;height:12px;border-radius:3px;background:${COL[b]};border:1px solid #888;vertical-align:-2px"></span> ${b}号艇</td><td>${a.length}</td><td>${near}</td><td>${cut}</td><td>${sp}</td><td>${pass}</td></tr>`; }
+  $("sumT").innerHTML=R.length?h:`<tr><td class="note">まだ記録がありません</td></tr>`;
+}
+function dl(name,text,type){ const a=document.createElement("a"); a.href=URL.createObjectURL(new Blob([text],{type})); a.download=name; a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),2000); }
+const fname=ext=>{ const V=$("venue").value?VEN[+$("venue").value-1]:"会場"; return `1M記録_${$("date").value}_${V}${$("rno").value||""}R.${ext}`; };
+$("csv").onclick=()=>{ const R=rows(); if(!R.length) return; const k=Object.keys(R[0]); dl(fname("csv"),"﻿"+[k.join(","),...R.map(r=>k.map(x=>r[x]).join(","))].join("\n"),"text/csv"); };
+$("json").onclick=()=>{ dl(fname("json"),JSON.stringify({meta:{venue:$("venue").value?VEN[+$("venue").value-1]:"",date:$("date").value,rno:$("rno").value,src:S.src},state:S,rows:rows()},null,1),"application/json"); };
+$("imp").onchange=async e=>{ const f=e.target.files[0]; if(!f) return; try{ const j=JSON.parse(await f.text()); if(j.state){ S={...S,...j.state}; }
+  if(j.meta){ const i=VEN.indexOf(j.meta.venue); if(i>=0) $("venue").value=i+1; if(j.meta.date) $("date").value=j.meta.date; if(j.meta.rno) $("rno").value=j.meta.rno; }
+  if(S.src&&S.src.startsWith("yt:")){ $("url").value="https://youtu.be/"+S.src.slice(3); }
+  save(); afterLoad(); draw(); msg("記録を読み込みました"+(S.src&&S.src.startsWith("yt:")?"。「読み込む」で同じ動画を開けます":"")); }catch(err){ msg("<b>JSONを読めませんでした</b>"); } };
+$("clear").onclick=()=>{ if(!confirm("この動画の記録を全部消しますか？")) return; S.pts=[]; save(); renderAll(); draw(); };
+renderCal(); renderAll();
+</script>
+</body>
+</html>
