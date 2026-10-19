@@ -462,11 +462,11 @@ const CLR=1.5, GAP=3.5, DT=0.02, A_LAT=18, A_DEC=7, A_ACC=4, XOUT=60;
    1マークまでは直線が中心で、選手の腕よりモーターの差が出る部分。
    ・伸び(最高速度): 展示タイム(直線150m)から
    ・出足: モーター2連率から。速さは最高速度へ指数的に近づく(時定数 tau。良いモーターほど短い)
-   ・スロー(内3艇)は助走が短く最高速度の88%、ダッシュ(外)は95%でスタートラインを通過する
+   ・スロー(内3艇)は助走が短く最高速度の91%、ダッシュ(外)は95%でスタートラインを通過する(差は小・中・大から選べる)
    ・速さ: 展示タイムから出した速さの1.16倍(唐津の映像で、大時計0から1マークまで約6秒だったのに合わせた)
    ・水面図のある会場は、スタンド側の岸までの距離で並びの幅を制限する
    ・スロー3艇・ダッシュ3艇が基本(5艇ならスロー3・ダッシュ2)。外枠の前付けがあれば2対4。画面で変えられる。スタートラインを通過するときの速さは、
-     スロー(助走が短い)が最高速度の88%、ダッシュ(助走が長い)が96%
+     スロー(助走が短い)が最高速度の91%、ダッシュ(助走が長い)が95%(既定)
    ・横の位置: スタートラインまでは、使える水面の幅を各艇で均等に分けて並ぶ。幅は1マークへ向かうほど狭くなるので、
      各艇の間隔はだんだん詰まる
    ・ST: 出走表の平均STとスタート展示のSTから予測(画面で調整できる)
@@ -475,7 +475,9 @@ const CLR=1.5, GAP=3.5, DT=0.02, A_LAT=18, A_DEC=7, A_ACC=4, XOUT=60;
      通ると、その間は速さが落ちる。新しい波ほど強く、最大で直線3%・旋回中7%
    買い/見送りの判定は、検証済みの簡易計算(平均ST+展示タイム)のまま。 */
 const LANE=6.4, BL=3.0, NOWALL=BL, VY_MAX=4, AY_MAX=6;
-const V0_SLOW=0.88, V0_DASH=0.96;            /* スタートライン通過時の速さ(最高速度に対する割合) */
+/* スタートライン通過時の速さ(最高速度に対する割合)。スローとダッシュの差は3段階から選べる(既定は「中」) */
+const V0_SET={small:[0.92,0.94,"小"],mid:[0.91,0.95,"中"],big:[0.88,0.96,"大"]};
+let V0_SLOW=0.91, V0_DASH=0.95;
 const Y_IN=8, W_START=34;                   /* スタートラインでの一番内の艇の位置と、内〜外の幅(m)(水面図がない会場の値) */
 /* 本番の速さ: 唐津の映像2本で、大時計0からトップが1マークに着くまで約6秒(展示タイムの速さのままだと約7秒)。展示より約15%速く走る */
 const RACE_V=1.16;
@@ -576,9 +578,10 @@ function renderSimList(first){
         +`<span class="num">ST <input type="number" class="stin" data-b="${x.b}" step="0.01" min="-0.05" max="0.4" value="${x.st.toFixed(2)}" aria-label="${x.b}号艇のST" style="width:66px;min-height:30px;padding:2px 4px">`
         +` ・ 1マーク <b data-t="${x.b}"></b>秒<br><span data-m="${x.b}"></span></span></li>`;
     }).join("")+ch.scr.map(b=>`<li class="scr"><span class="cno">-</span><span class="chip" style="${BOATC(b)}">${b}</span><span class="nm">欠場</span><span class="num"></span></li>`).join("")
-      +`<li style="display:block;border:0;background:none;padding:2px 0"><label class="note">スロー <select id="nslow" style="min-height:30px;padding:2px 4px">${[1,2,3,4].map(k=>`<option value="${k}"${k===SIM.nSlow?" selected":""}>${k}艇(${k}対${SIM.boats.length-k})</option>`).join("")}</select>${SIM.nSlowAuto===2?" 前付けがあるので2対4にしています":""}</label> <button class="pill" id="st-reset">STを予測に戻す</button> <span class="note">ST予測: 平均ST(F持ちは F1+0.015秒・F2+0.055秒の補正込み)を7割、スタート展示のSTを3割。変えると動きを計算し直します。動きは物理計算(出足・伸び・スロー88%/ダッシュ96%のスタート速度・水面の幅を均等に分けた並び・1艇身前に出たら絞る・引き波・不良航法(斜行・追い抜き・ダンプ)になる進路は選ばない)で、買い/見送りの判定は検証済みの簡易計算(平均ST+展示タイム)のままです</span></li>`;
+      +`<li style="display:block;border:0;background:none;padding:2px 0"><label class="note">スロー <select id="nslow" style="min-height:30px;padding:2px 4px">${[1,2,3,4].map(k=>`<option value="${k}"${k===SIM.nSlow?" selected":""}>${k}艇(${k}対${SIM.boats.length-k})</option>`).join("")}</select>${SIM.nSlowAuto===2?" 前付けがあるので2対4にしています":""}</label> <label class="note">スタートの速度差(スロー/ダッシュ) <select id="v0gap" style="min-height:30px;padding:2px 4px">${Object.entries(V0_SET).map(([k,v])=>`<option value="${k}"${(SIM.v0gap||"mid")===k?" selected":""}>${v[2]}(${Math.round(v[0]*100)}%/${Math.round(v[1]*100)}%)</option>`).join("")}</select></label> <button class="pill" id="st-reset">STを予測に戻す</button> <span class="note">ST予測: 平均ST(F持ちは F1+0.015秒・F2+0.055秒の補正込み)を7割、スタート展示のSTを3割。変えると動きを計算し直します。動きは物理計算(出足・伸び・スタートラインでの速さ(最高速度に対する割合、上で選んだスロー/ダッシュの値)・水面の幅を均等に分けた並び・1艇身前に出たら絞る・引き波・不良航法(斜行・追い抜き・ダンプ)になる進路は選ばない)で、買い/見送りの判定は検証済みの簡易計算(平均ST+展示タイム)のままです</span></li>`;
     $("sim-list").querySelectorAll(".stin").forEach(inp=>inp.onchange=()=>{ const v=parseFloat(inp.value); if(isFinite(v)){ SIM.stOver[+inp.dataset.b]=Math.max(-0.05,Math.min(0.4,v)); simPhys(false); } });
     $("nslow").onchange=e=>{ SIM.nSlow=+e.target.value; simPhys(true); };
+    $("v0gap").onchange=e=>{ SIM.v0gap=e.target.value; const v=V0_SET[SIM.v0gap]; V0_SLOW=v[0]; V0_DASH=v[1]; simPhys(true); };
     $("st-reset").onclick=()=>{ SIM.stOver={}; SIM.boats.forEach(o=>{ const e=$("sim-list").querySelector(`.stin[data-b="${o.b}"]`); if(e) e.value=o.stP.toFixed(2); }); simPhys(false); };
   }
   SIM.boats.forEach(x=>{
