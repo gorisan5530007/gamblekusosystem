@@ -683,16 +683,22 @@ function rearAvoid(B,n,i0){
   /* 追突はしない: 前の艇の真後ろから詰まりそうなら、後ろの艇は早めに横へずれて並びかける(当たらない間隔で横から競る)。
      ずれる側は艇ごとに最初に決めた側から変えない(左右にふらつかない) */
   for(let rep=0;rep<2;rep++) for(let a=0;a<B.length;a++){
-    const need=new Float32Array(n), nx=new Float32Array(n), ny=new Float32Array(n); let side=0, any=false;
+    const need=new Float32Array(n), nx=new Float32Array(n), ny=new Float32Array(n), yieldAt=new Uint8Array(n); let side=0, any=false;
     for(let i=i0;i<n;i++){ const P=B[a].fr[i], h=headingAt(B[a].fr,i); nx[i]=-h[1]; ny[i]=h[0];
       for(let c=0;c<B.length;c++){ if(c===a) continue; const Q=B[c].fr[i]; if(P.x<0&&Q.x<0) continue;
         const dx=Q.x-P.x, dy=Q.y-P.y, lon=dx*h[0]+dy*h[1], lat=dx*nx[i]+dy*ny[i];
+        if(lon>0.3&&lon<BOAT_L+1.5&&Math.abs(lat)<BOAT_W+0.8&&P.ph===1){ yieldAt[i]=1; continue; }   /* 旋回中は横へ逃げず、少し待つ */
         if(lon>0.3&&lon<BOAT_L+1.5&&Math.abs(lat)<BOAT_W+0.8){   /* 前の艇が進路上にいる */
           if(!side) side=Math.abs(lat)>0.15?(lat>0?-1:1):(((P.x-MX)*nx[i]+P.y*ny[i])>=0?1:-1);   /* ずれている側へ。真後ろならブイから離れる側(外)へ */
           const sl=lat*side;   /* 決めた側から見た相手の位置(負=相手はずれる側と反対) */
           const nd=sl<0?(BOAT_W+0.8)+sl:0;   /* 相手が反対側にいるときだけ、必要な分ずれる */
           if(nd>need[i]){ need[i]=nd; any=true; } } } }
+    /* 旋回中に前が詰まったら、0.3秒ほど速さを1割落として間をあける */
+    if(yieldAt.some(v=>v)){ const sl=new Float32Array(n).fill(1); for(let i=i0;i<n;i++) if(yieldAt[i]) for(let k=Math.max(i0,i-10);k<Math.min(n,i+15);k++) sl[k]=0.9;
+      const fr=B[a].fr, m=fr.length, out=[fr[0]]; const at=f=>{ const j=Math.min(m-2,Math.floor(f)), u=Math.min(1,f-j), A=fr[j], C=fr[j+1]; return {x:A.x+(C.x-A.x)*u,y:A.y+(C.y-A.y)*u,ph:u<0.5?A.ph:C.ph}; };
+      let pf=0; for(let i=1;i<m;i++){ pf=Math.min(m-1,pf+(i<n?sl[i]:1)); out.push(at(pf)); } B[a].fr=out; }
     if(!any) continue;
+    for(let i=i0;i<n;i++) need[i]=Math.min(need[i],BOAT_W+0.8);
     /* 0.5秒前から少しずつ寄せて、抜けたらゆっくり戻す(横の速さ 3m/秒まで) */
     const off=new Float32Array(n); for(let i=n-2;i>=i0;i--) off[i]=Math.max(need[i],off[i+1]-0.06);
     for(let i=i0+1;i<n;i++) off[i]=Math.max(off[i],off[i-1]-0.03);
@@ -753,6 +759,12 @@ function resolveContacts(){
   /* 立ち上がりの時刻を付け直す */
   B.forEach(o=>{ const j=o.fr.findIndex((q,i)=>i>0&&q.ph===2&&q.x<=XOUT); if(j>0) o.tOut=SIM.t0+j*DT; });
 }
+/* 先に回り始めた艇の邪魔をしないか: 旋回中に、その艇が0.1〜0.6秒後に通る場所へ入っていたら「ふさいでいる」 */
+function blocksAhead(P,done){ let c=0;
+  for(const q of done){ const F=q.plan.fr; if(!(q.plan.Te<P.Te)) continue;
+    for(let i=0;i<P.fr.length;i++){ const a=P.fr[i]; if(a.ph!==1&&(!F[i]||F[i].ph!==1)) continue;
+      for(let d=5;d<=30;d+=5){ const Q=F[i+d]; if(!Q) break; if(Math.hypot(a.x-Q.x,a.y-Q.y)<2.5){ c++; break; } } } }
+  return c; }
 function pairGap(B,a,c,i){ return Math.max(gapOf(B,a,c,i).g,gapOf(B,c,a,i).g); }   /* どちらかの向きで離れていれば重なりなし */
 function minDist(fa,fb,until){ let m=1e9; const n=Math.min(fa.length,fb.length,Math.ceil((until-SIM.t0)/DT));
   for(let i=Math.round((0-SIM.t0)/DT);i<n;i++){ const d=Math.hypot(fa[i].x-fb[i].x,fa[i].y-fb[i].y); if(d<m) m=d; } return m; }
@@ -771,7 +783,7 @@ function planTurn(){
   if(S.k==="差し"){
     /* 内側の艇はみな先に回って外へ流れる(内の艇ほど先・小さめ)。勝つ艇はその全部の内側=最内に入る */
     if(inner.length){ order=[...inner,W,...order.filter(o=>o!==W&&!inner.includes(o))];
-      inner.forEach((T,k)=>opts.set(T,{radii:[[12,14.5,17],[14.5,17,20],[17,20,23]][Math.min(2,inner.length-1-k)],holds:[1],alat:14,exitBoost:0.93})); }   /* 流れる: 曲がりきれず外へ膨らみ、立ち上がりも鈍る */
+      inner.forEach((T,k)=>opts.set(T,{radii:[[12,14.5,17],[14.5,17,20],[17,20,23]][Math.min(2,inner.length-1-k)],holds:[1,0.93,0.86,0.79],alat:14,exitBoost:0.93})); }   /* 流れる: 曲がりきれず外へ膨らみ、立ち上がりも鈍る */
     else order=[W,...order.filter(o=>o!==W)];
     opts.set(W,{radii:[5,6.5,8],holds:[0.86,0.79,0.72,0.64,0.56,0.48],late:true,alat:21}); }   /* 小回りでもしっかり曲がれる(ターンが決まる) */
   if(S.k==="まくり"){
@@ -786,7 +798,7 @@ function planTurn(){
   if(S.k==="まくり差し"&&inner.length){
     const top=inner[0], cov=inner.slice(1);   /* cov: まくられて内に残る艇(すぐ内側の艇と、その内のインでない艇) */
     order=[top,W,...cov.slice().reverse(),...order.filter(o=>o!==W&&o!==top&&!cov.includes(o))];
-    opts.set(top,{radii:cov.length?[12,14.5,17]:[8,10,12],holds:[1],alat:15,exitBoost:0.95});   /* インは先に回るが流れる */
+    opts.set(top,{radii:cov.length?[14.5,17,20]:[10,12,14.5],holds:[1,0.93,0.86,0.79],alat:15,exitBoost:0.95});   /* インは先に回るが流れる */
     cov.forEach(m=>opts.set(m,{radii:[5,6.5,8],holds:[0.72,0.64,0.56,0.48],late:true,alat:21}));   /* 飲まれて減速、ブイ際を小さく */
     opts.set(W,{radiiFn:done=>{ const yt=top.plan?top.plan.yExit:-12, yin=cov.length?-1.5:-1.5, ys=Math.min(wallY(W,110),40);
       const out=[]; [0.4,0.5,0.6,0.7].forEach(f=>{ const ex=yin+(yt-yin)*f, r=(ys-ex)/2; if(r>=5) out.push(+r.toFixed(1)); });
@@ -808,17 +820,14 @@ function planTurn(){
   /* まだ進路を決めていない艇は、1マークの手前(110mまで)は自分のコースをまっすぐ来るものとして扱う */
   const lane=o=>{ const st=o.stEff??o.st, fr=[]; for(let tt=SIM.t0;tt<=SIM.tMax;tt+=DT){ const x=freeX(o,tt-st); fr.push(x<110?{x,y:wallY(o,x)}:null); } return fr; };
   const laneDist=(fa,fb)=>{ let m=1e9; for(let i=Math.round((0-SIM.t0)/DT);i<Math.min(fa.length,fb.length);i++){ if(!fb[i]) continue; const d=Math.hypot(fa[i].x-fb[i].x,fa[i].y-fb[i].y); if(d<m) m=d; } return m; };
-  const runPlan=()=>{
-  const done=[];
-  order.forEach(o=>{
-    const pending=order.filter(q=>q!==o&&!done.includes(q)).map(lane);
+  const planOne=(o,done,pending,refine)=>{
     const op=opts.get(o)||{}, radii=op.radiiFn?op.radiiFn(done):(op.radii||RADII), holds=op.holds||HOLDS;
-    let best=null, safest=null; const cands=[], cands2=[], cands3=[];
+    let best=null, safest=null; const cands=[], cands2=[], cands3=[], cands4=[];
     const exs=op.exits||[null];
     exs.forEach(ex=>radii.forEach(r=>holds.forEach(h=>{
       /* 内へ大きく寄るときは、手前ぎりぎりまで自分のコースを走ってから切り込む選択肢も試す(曲がれる範囲で) */
       const late=MX-Math.max(35,2.2*Math.abs(wallY(o,110)-Math.min(wallY(o,110),2*r-CLR)));
-      (op.late?[late]:op.band?[40,60,80]:(late-80>12?[80,late]:[80])).forEach(xs=>{
+      (op.late?[late]:op.band?[40,60,80]:refine?[60,80]:(late-80>12?[80,late]:[80])).forEach(xs=>{
       const P=buildPath(o,r,h,{...op,xs,exitY:ex});
       const md=Math.min(done.length?Math.min(...done.map(q=>minDist(P.fr,q.plan.fr,Math.max(P.tOut,q.plan.tOut)+1.2))):1e9,   /* 立ち上がり後に追いつく場合も含めて調べる */
                         pending.length?Math.min(...pending.map(L=>laneDist(P.fr,L))):1e9);
@@ -829,14 +838,19 @@ function planTurn(){
       if(op.band&&op.insideOf&&op.insideOf.plan&&P.yExit>op.insideOf.plan.yExit+op.band) side=false;
       if(op.band&&op.insideOf&&op.insideOf.plan&&P.r>op.insideOf.plan.r-1) side=false;   /* 旋回中もまくった艇の内側(後ろから内へ切り込む) */
       if(op.innerOf&&op.innerOf.plan&&P.yExit<op.innerOf.plan.yExit+2.5) side=false;        /* まくり差し: インの艇の内を抜ける */
+      if(op.innerOf&&op.innerOf.plan&&P.r>op.innerOf.plan.r-(BOAT_W+1.2)) side=false;          /* 旋回中もインの艇の内側を回る(弧が重ならない) */
+      if(op.innerOf&&op.innerOf.plan&&P.Te<op.innerOf.plan.Te+0.15) side=false;               /* インの艇が先に回り始め、その内へ後から切り込む */
       if(op.outerOf&&op.outerOf.length&&P.yExit>-CLR-GAP) side=false;                         /* まくり差し: 飲んだ艇がブイ際に入れるだけ外を回る */
       /* 追突しない: 立ち上がりで前後に詰まる(同じ横位置で0.7秒以内に続く)なら、艇の幅+余裕だけ横にずらして並ぶ */
       const spread=!(o!==W&&done.some(q=>Math.abs(P.yExit-q.plan.yExit)<BOAT_W+0.9&&Math.abs(P.tOut-q.plan.tOut)<0.7));
+      const clear=blocksAhead(P,done)===0;   /* 先行艇の邪魔をしない位置取り */
+      P.blk=clear?0:1;
       P.side=side;
       P.foul=slantFoul(P,[...done.map(q=>q.plan.fr),...pending])?"斜行":(passFoul(o,P,done)?"追い抜き":null);
-      if(md>=GAP&&okA&&side&&spread&&!P.foul){ cands.push(P); if(!best||P.tOut<best.tOut) best=P; }
-      else if(o!==W&&md>=BOAT_L-0.4&&okA&&side&&spread&&!P.foul) cands2.push(P);
-      else if(o!==W&&md>=BOAT_L-0.4&&okA&&side&&!P.foul) cands3.push(P);   /* 横に並べないときは、後ろで間をあけて続く */   /* 混み合うときは、艇1艘ぶん空いていれば入る(ぶつかりは接触の計算で) */
+      if(md>=GAP&&okA&&side&&spread&&clear&&!P.foul){ cands.push(P); if(!best||P.tOut<best.tOut) best=P; }
+      else if(o!==W&&md>=BOAT_L-0.4&&okA&&side&&spread&&clear&&!P.foul) cands2.push(P);
+      else if(o!==W&&md>=BOAT_L-0.4&&okA&&side&&clear&&!P.foul) cands3.push(P);   /* 横に並べないときは、後ろで間をあけて続く */
+      else if(md>=BOAT_L-0.4&&okA&&side&&!P.foul) cands4.push(P);                  /* どうしても先行艇に近づくとき(最後の手段) */   /* 混み合うときは、艇1艘ぶん空いていれば入る(ぶつかりは接触の計算で) */
       /* 候補が無いときの次善: 並び順を守る > 反則なし > 曲がれる > 間隔が広い */
       const sc=q=>(q.side?8:0)+(!q.foul?4:0)+(q.okA?2:0);
       P.okA=okA; P.md=md; if(!safest||sc(P)>sc(safest)||(sc(P)===sc(safest)&&md>safest.md)) safest=P;
@@ -845,10 +859,26 @@ function planTurn(){
     /* 引き波を入れて選び直す(速い候補から6つ) */
     if(!cands.length&&cands2.length) cands.push(...cands2);
     if(!cands.length&&cands3.length) cands.push(...cands3);
-    if(cands.length){ cands.sort((a,b)=>a.tOut-b.tOut); best=cands.slice(0,6).map(P=>applyWake(o,P,done)).sort((a,b)=>a.tOut-b.tOut)[0]; }
+    if(!cands.length&&cands4.length){ cands4.sort((a,b)=>blocksAhead(a,done)-blocksAhead(b,done)); cands.push(...cands4.slice(0,6)); }
+    /* 速さが同じくらいなら、むやみに大きく外へ回らない(出口が15mより外は少し損と見る) */
+    const key=P=>P.tOut+(o===W?0:0.03*Math.max(0,-P.yExit-15));
+    if(cands.length){ cands.sort((a,b)=>key(a)-key(b)); best=cands.slice(0,6).map(P=>applyWake(o,P,done)).sort((a,b)=>key(a)-key(b))[0]; }
     else if(safest){ const md=safest.md, fl=safest.foul||(md<GAP?"ダンプ":null); safest=applyWake(o,safest,done); safest.md=md; safest.foul=fl; }
-    o.plan=best||safest; done.push(o);
-  });
+    o.plan=best||safest;
+  };
+  const runPlan=()=>{
+    const done=[];
+    order.forEach(o=>{ planOne(o,done,order.filter(q=>q!==o&&!done.includes(q)).map(lane)); done.push(o); });
+  };
+  const refinePlan=()=>{
+    /* 見直し: 全艇の進路が決まったあと、勝つ艇以外は「ほかの全艇」を見て選び直す(先に回る艇の邪魔をしない位置取り) */
+    /* 何度か見直して、先行艇をふさぐ量が一番少ない並びを使う(見直すと別の艇が詰まることもあるので) */
+    const score=()=>SIM.boats.reduce((t,o)=>t+blocksAhead(o.plan,SIM.boats.filter(q=>q!==o))+(o.plan.md<BOAT_L-0.4?5:0),0);
+    let bestS=score(), keep=SIM.boats.map(o=>o.plan);
+    for(let it=0;it<2&&bestS>0;it++){
+      order.forEach(o=>{ if(o===W) return; planOne(o,SIM.boats.filter(q=>q!==o),[],true); });
+      const sc=score(); if(sc<bestS){ bestS=sc; keep=SIM.boats.map(o=>o.plan); } }
+    SIM.boats.forEach((o,k)=>o.plan=keep[k]);
   };
   /* その展開になるよう、勝つ艇のスタートを0.02秒ずつ速めて試す(最大0.14秒) */
   SIM.boats.forEach(o=>o.stEff=o.st);
@@ -863,6 +893,7 @@ function planTurn(){
     if(!W.plan.foul){ const gap=W.plan.tOut-Math.min(...SIM.boats.filter(o=>o!==W).map(o=>o.plan.tOut)); if(bestRun==null||gap<bestRun.gap) bestRun={adj,gap}; }
   }
   if(!ok&&bestRun){ adj=bestRun.adj; W.stEff=W.st-adj; simWall(); usePlan(); runPlan(); }
+  refinePlan();   /* 決まった展開で、ほかの艇の位置取りを見直す(勝つ艇の進路はそのまま) */
   SIM.adj=Math.min(adj,0.20); SIM.ok=ok;
   SIM.boats.forEach(o=>{ o.fr=o.plan.fr; o.Te=o.plan.Te; o.E=o.plan.E; o.tOut=o.plan.tOut; o.r=o.plan.r; o.hold=o.plan.hold; o.wakeLoss=o.plan.wakeLoss||0; o.wakeT=o.plan.wakeT||0; o.foul=o.plan.foul||null; });
   /* バックストレッチでは勝つ艇を抜かせない(先に回った艇の引き波と、内・前を取った有利さ)。抜きの展開だけは別 */
