@@ -832,7 +832,7 @@ function planTurn(){
     cov.forEach(m=>opts.set(m,{radii:[9,11,13.5],holds:[0.86,0.79,0.72,0.64,0.56,0.48],late:true,alat:10.5}));   /* 飲まれて減速、ブイ際を小さく */
     /* 勝つ艇: インの艇が回り始めたあと、その後ろから内へ切り込み、インの艇とブイ際の艇の間に出る(出口の横位置を決めて半径を出す) */
     opts.set(W,{radii:[12,14,17,20],exitR:true,exitsFn:()=>{ const ex=flows.filter(q=>q.plan).map(q=>q.plan.yExit), yt=ex.length?Math.max(...ex):-30, yin=YIN-GAP; return [0.3,0.45,0.6,0.75].map(f=>yin+(yt-2.5-yin)*f); },
-      cut:true,holds:[1,0.93,0.86,0.79,0.72],alat:10.5,fullTurn:true,innerOf:flows,outerOf:cov}); }
+      cut:true,holds:[1,0.93,0.86,0.79,0.72,0.64,0.56],alat:10.5,fullTurn:true,innerOf:flows,outerOf:cov}); }
   if(S.k==="抜き"){ const f=order.find(o=>o!==W); order=[f,W,...order.filter(o=>o!==W&&o!==f)]; opts.set(W,{exitBoost:1.04}); }
   /* 勝つ艇より外のコースの艇は、勝つ艇の外を回る(勝つ艇の内へは入れない)。逃げのときの2コースだけは1号艇の内を差して続いてよい */
   /* まくり: 勝つ艇が一番外を回る。ほかの艇はみな勝つ艇の内側(内の艇は飲まれてブイ際、外の艇は後ろからついて内へ) */
@@ -901,7 +901,7 @@ function planTurn(){
     else if(safest){ const md=safest.md, fl=safest.foul||(md<GAP?"ダンプ":null); safest=applyWake(o,safest,done); safest.md=md; safest.foul=fl; }
     o.plan=best||safest;
     /* 展開どおりの動きではホーム側でほかの艇とぶつかってしまうときは、展開の役割を外して自然な進路で走る */
-    if(!plain&&o.plan&&o.plan.home){ const keep=o.plan; planOne(o,done,pending,refine,true); if(o.plan.home) o.plan=keep; }
+    if(!plain&&o.plan&&o.plan.home){ const keep=o.plan; planOne(o,done,pending,refine,true); if(o.plan.home) o.plan=keep; else o.plan.plain=true; }
   };
   const runPlan=()=>{
     const done=[];
@@ -923,18 +923,19 @@ function planTurn(){
   SIM.boats.forEach(o=>o.stEff=o.st);
   let adj=0, bestRun=null;
   let ok=false;
-  for(;adj<=0.2001;adj+=0.04){
+  const ADJMAX=S.k==="まくり差し"?0.30:0.20;   /* まくり差しは隊形の条件がきびしいので、少し広く試す */
+  for(;adj<=ADJMAX+0.0001;adj+=0.04){
     W.stEff=W.st-adj; simWall(); usePlan(); runPlan();
-    ok=(S.k==="抜き"?true:SIM.boats.every(o=>o===W||W.plan.tOut<o.plan.tOut))&&!W.plan.foul&&W.plan.side!==false;   /* 展開の形(差しは内の艇が先に回る など)を守れているときだけ成立 */   /* 立ち上がりでほぼ並んでいれば、先に回った勝つ艇が前(下の「抜かせない」で前を保つ) */
+    ok=(S.k==="抜き"?true:SIM.boats.every(o=>o===W||W.plan.tOut<o.plan.tOut))&&!W.plan.foul&&W.plan.side!==false&&!W.plan.plain&&!W.plan.home;   /* 展開の形(差しは内の艇が先に回る など)を守れているときだけ成立 */   /* 立ち上がりでほぼ並んでいれば、先に回った勝つ艇が前(下の「抜かせない」で前を保つ) */
     if(window.__DBG) console.log("adj",adj.toFixed(2),SIM.boats.map(o=>o.b+":"+o.plan.r+"/"+o.plan.tOut.toFixed(2)+(o.plan.foul?"!"+o.plan.foul:"")).join(" "));
     if(ok) break;
     /* うまくいかないときのために、反則なしで勝つ艇が一番良い位置にいた回を覚えておく */
-    if(!W.plan.foul&&W.plan.side!==false){ const gap=W.plan.tOut-Math.min(...SIM.boats.filter(o=>o!==W).map(o=>o.plan.tOut)); if(bestRun==null||gap<bestRun.gap) bestRun={adj,gap}; }
+    if(!W.plan.foul&&W.plan.side!==false&&!W.plan.plain&&!W.plan.home){ const gap=W.plan.tOut-Math.min(...SIM.boats.filter(o=>o!==W).map(o=>o.plan.tOut)); if(bestRun==null||gap<bestRun.gap) bestRun={adj,gap}; }
   }
   if(!ok&&bestRun){ adj=bestRun.adj; W.stEff=W.st-adj; simWall(); usePlan(); runPlan(); }
   else if(!ok){ adj=0; W.stEff=W.st; simWall(); usePlan(); runPlan(); }   /* 形を守って勝てる回が無ければ、予想どおりのスタートでの動きを見せる */
   refinePlan();   /* 決まった展開で、ほかの艇の位置取りを見直す(勝つ艇の進路はそのまま) */
-  SIM.adj=Math.min(adj,0.20); SIM.ok=ok;
+  SIM.adj=Math.min(adj,ADJMAX); SIM.ok=ok; SIM.adjMax=ADJMAX; SIM.wPlain=!!W.plan.plain;
   SIM.boats.forEach(o=>{ o.fr=o.plan.fr; o.Te=o.plan.Te; o.E=o.plan.E; o.tOut=o.plan.tOut; o.r=o.plan.r; o.hold=o.plan.hold; o.wakeLoss=o.plan.wakeLoss||0; o.wakeT=o.plan.wakeT||0; o.foul=o.plan.foul||null; });
   /* バックストレッチでは勝つ艇を抜かせない(先に回った艇の引き波と、内・前を取った有利さ)。抜きの展開だけは別。
      位置をずらすのではなく、追いつきそうな艇が手前から少しずつアクセルを緩める(減速は最大およそ4m/秒²)ことで、勝つ艇の2m後ろに収める */
@@ -950,7 +951,7 @@ function planTurn(){
     "抜き":"1マークは2番手で回り、その後の直線で前の艇を抜く"};
   if(SIM.sq) SIM.label="絞りまくり("+S.b+"号艇)";
   const dsc=SIM.sq?"1マークまでに内の艇より1艇身以上前に出て絞りきり、外を回らずブイ際の最短ルートで回る。内の艇はその後ろ・外を回ってまくった艇の引き波に乗り、遅れる":(DESC[S.k]||"");
-  $("sim-desc").textContent=`${SIM.sq?"絞りまくり":S.k}(${S.b}号艇): ${dsc}`+(!SIM.ok?`(この隊形からは起こりにくい展開です。${S.b}号艇のスタートが0.20秒速くても、不良航法(斜行・無理な追い抜き)なしでは先頭に立てません)`:SIM.adj>0.001?`(この展開は、${S.b}号艇のスタートが予想より約${SIM.adj.toFixed(2)}秒速い場合)`:"")+` ※ほかの艇は展開どおりの並び(差し・逃げは勝つ艇の外、まくりは内、絞りまくりは外)を守る範囲で、それぞれ一番早く抜け出せる回り方を選びます。回ったあとのバックストレッチでは勝つ艇は抜かれません`;
+  $("sim-desc").textContent=`${SIM.sq?"絞りまくり":S.k}(${S.b}号艇): ${dsc}`+(!SIM.ok?`(この隊形からは起こりにくい展開です。${S.b}号艇のスタートが${SIM.adjMax.toFixed(2)}秒速くても、不良航法(斜行・無理な追い抜き)や接触なしでは${S.k}の形で先頭に立てません。${SIM.wPlain?`その形の進路を取るとホーム側でほかの艇とぶつかるため、${S.b}号艇は自然な進路で描いています`:`${S.k}の形で回った場合の動きを描いています`})`:SIM.adj>0.001?`(この展開は、${S.b}号艇のスタートが予想より約${SIM.adj.toFixed(2)}秒速い場合)`:"")+` ※ほかの艇は展開どおりの並び(差し・逃げは勝つ艇の外、まくりは内、絞りまくりは外)を守る範囲で、それぞれ一番早く抜け出せる回り方を選びます。回ったあとのバックストレッチでは勝つ艇は抜かれません`;
 }
 function boatAt(o,t){
   const f=(t-SIM.t0)/DT, i=Math.max(0,Math.min(o.fr.length-2,Math.floor(f))), u=Math.max(0,Math.min(1,f-i));
