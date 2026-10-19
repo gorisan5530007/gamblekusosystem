@@ -813,7 +813,7 @@ function planTurn(){
   /* 選ぶ順番: ふつうは1マークに先に着く順。展開に合わせて勝つ艇を前に出す */
   let order=SIM.boats.slice().sort((a,b)=>a.T-b.T);
   const inner=SIM.boats.filter(o=>o.c<W.c).sort((a,b)=>a.c-b.c);
-  let opts=new Map();
+  let opts=new Map(); SIM.mzAlt=null;
   if(S.k==="逃げ"||S.k==="まくり"){ order=[W,...order.filter(o=>o!==W)]; }
   /* 差し: すぐ内側の艇が先にブイを回るが、全速で入って外へ流れる。勝つ艇は手前で少し待ち(減速)、
      その艇の内側(ブイ際)を小さく回って、出口で前に出る */
@@ -836,6 +836,7 @@ function planTurn(){
     /* cov: まくられて内に残る艇(すぐ内側の1艇)。flows: それより内の艇は先に回って外へ流れる(内の艇ほど先・小さめ) */
     const cov=inner.length>1?[inner[inner.length-1]]:[], flows=inner.length>1?inner.slice(0,-1):inner.slice(), top=flows[flows.length-1];
     order=[...flows,...cov,W,...order.filter(o=>o!==W&&!flows.includes(o)&&!cov.includes(o))];   /* 飲まれる艇は先に減速を決める(まくる艇はその減速した艇の前を越える) */
+    SIM.mzAlt=[...flows,W,...cov,...order.filter(o=>o!==W&&!flows.includes(o)&&!cov.includes(o))];   /* うまくいかないときは、まくる艇の進路を先に決めて、飲まれる艇がそれに合わせて引く */
     flows.forEach((T,k)=>opts.set(T,{radii:cov.length?[[24,28,33],[20,24,28],[17,20,24]][Math.min(2,flows.length-1-k)]:[17,20,24],holds:[1,0.93,0.86,0.79,0.72,0.64],alat:6,exitBoost:0.9}));   /* インは先に回るが、膨らんで立ち上がりが鈍る */
     cov.forEach(m=>opts.set(m,{radii:[9,11,13.5],holds:[0.86,0.79,0.72,0.64,0.56,0.48],late:true,alat:10.5}));   /* 飲まれて減速、ブイ際を小さく */
     /* 勝つ艇: インの艇が回り始めたあと、その後ろから内へ切り込み、インの艇とブイ際の艇の間に出る(出口の横位置を決めて半径を出す) */
@@ -922,8 +923,10 @@ function planTurn(){
     if(!plain&&o.plan&&o.plan.home){ const keep=o.plan; planOne(o,done,pending,refine,true); if(o.plan.home) o.plan=keep; else o.plan.plain=true; }
   };
   const runPlan=()=>{
-    const done=[];
+    let done=[];
     order.forEach(o=>{ planOne(o,done,order.filter(q=>q!==o&&!done.includes(q)).map(lane)); done.push(o); });
+    if(S.k==="まくり差し"&&SIM.mzAlt&&(W.plan.plain||W.plan.home)){ const keepO=order; order=SIM.mzAlt; done=[];
+      order.forEach(o=>{ planOne(o,done,order.filter(q=>q!==o&&!done.includes(q)).map(lane)); done.push(o); }); order=keepO; }
   };
   const refinePlan=()=>{
     /* 見直し: 全艇の進路が決まったあと、勝つ艇以外は「ほかの全艇」を見て選び直す(先に回る艇の邪魔をしない位置取り) */
