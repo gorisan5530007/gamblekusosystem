@@ -1117,6 +1117,20 @@ function parseProgram(){
   setMsg("msg3",`${PROG.length}レースを解析しました(${new Set(PROG.map(x=>x.v)).size}会場)`,PROG.length>0);
   renderReco();
 }
+/* 2着・3着の補正: 1着と同じ鋭さで2着・3着も決まる前提だと、上位の組の確率が実際より高く出る
+   (検証: 3連複の最有力が「55%」と出た組の実際の的中は35%)。2着は強さをL2乗、3着はL3乗して選ぶ。
+   L2・L3 は kyotei_rating.py が直近180日の着順から推定(無いときは2026年1〜5月の推定値) */
+function plLam(){ const R=(typeof RATING!=="undefined")?RATING:{}; return [R.L2||0.686, R.L3||0.506]; }
+function plTri(w,i,j,m){
+  const [a,b]=plLam(); let t1=0,t2=0,t3=0;
+  for(let x=0;x<w.length;x++){ t1+=w[x]; if(x!==i){ t2+=Math.pow(w[x],a); if(x!==j) t3+=Math.pow(w[x],b); } }
+  return (w[i]/t1)*(Math.pow(w[j],a)/t2)*(Math.pow(w[m],b)/t3);
+}
+function plExa(w,i,j){
+  const [a]=plLam(); let t1=0,t2=0;
+  for(let x=0;x<w.length;x++){ t1+=w[x]; if(x!==i) t2+=Math.pow(w[x],a); }
+  return (w[i]/t1)*(Math.pow(w[j],a)/t2);
+}
 function evalRace(x){
   /* 番組表のみで学習した1着モデル(47,079レース)。進入は枠なり想定。 */
   const e=x.e, W=PROGM.w, G={A1:4,A2:3,B1:2,B2:1};
@@ -1160,12 +1174,7 @@ function evalRace(x){
   })();
   const pp1=[0,0,0,0,0,0],pp2=[0,0,0,0,0,0],pp3=[0,0,0,0,0,0];
   PERM.forEach(([i,j,m])=>{
-    const s1=strength[i]/strength.reduce((a,b)=>a+b,0);
-    const remJ=strength.reduce((a,v,idx)=>idx===i?a:a+v,0);
-    const s2=strength[j]/remJ;
-    const remM=strength.reduce((a,v,idx)=>(idx===i||idx===j)?a:a+v,0);
-    const s3=strength[m]/remM;
-    const v=s1*s2*s3;
+    const v=plTri(strength,i,j,m);
     pp1[i]+=v; pp2[j]+=v; pp3[m]+=v;
   });
   const mxNat=Math.max(...nats), avg=mn;
@@ -1342,10 +1351,7 @@ function betPlain(x,ev){
 /* ガチガチモードの1点: プール220%の候補の中から、同時的中確率が最も高い組番を選ぶ(記事・結果検証で共通) */
 function tripleProbOf(strength,c){
   const [i,j,m]=c.split("-").map(n=>+n-1);
-  const tot=strength.reduce((a,b)=>a+b,0);
-  const remJ=strength.reduce((a,v,idx)=>idx===i?a:a+v,0);
-  const remM=strength.reduce((a,v,idx)=>(idx===i||idx===j)?a:a+v,0);
-  return (strength[i]/tot)*(strength[j]/remJ)*(strength[m]/remM);
+  return plTri(strength,i,j,m);
 }
 const WARN_COCOMO="過去1年の検証(6,826レース): 的中13.6%・回収率79.6%・最大41連敗。ココモ法で回すと、資金10万〜1,000万円のどれでも開始6日目に破産しました。1回あたりの回収率は賭け方では上がりません";
 function gachiTopCombo(ev){
@@ -2824,7 +2830,7 @@ function calc(){
   const tri=[];
   for(let i=0;i<6;i++)for(let j=0;j<6;j++)for(let k=0;k<6;k++){
     if(i===j||j===k||i===k)continue;
-    tri.push({i,j,k,c:(i+1)+"-"+(j+1)+"-"+(k+1),pr:p[i]*(p[j]/(1-p[i]))*(p[k]/(1-p[i]-p[j]))});
+    tri.push({i,j,k,c:(i+1)+"-"+(j+1)+"-"+(k+1),pr:plTri(p,i,j,k)});
   }
   tri.sort((a,b)=>b.pr-a.pr);curTri=tri;
   /* 連対率集計 */
@@ -4503,7 +4509,7 @@ function refreshEVs(){
 }
 function renderExa(p){
   const exa=[];
-  for(let i=0;i<6;i++)for(let j=0;j<6;j++){if(i===j)continue;exa.push({c:(i+1)+"-"+(j+1),pr:p[i]*p[j]/(1-p[i])});}
+  for(let i=0;i<6;i++)for(let j=0;j<6;j++){if(i===j)continue;exa.push({c:(i+1)+"-"+(j+1),pr:plExa(p,i,j)});}
   exa.sort((a,b)=>b.pr-a.pr);
   let h="";
   for(let n=0;n<8;n+=2){const a=exa[n],b=exa[n+1];
