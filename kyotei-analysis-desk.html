@@ -111,6 +111,16 @@ footer{margin-top:28px;font-size:12px;color:var(--faint);border-top:1px solid va
 <section class="panel" style="border:1px solid var(--acc, #4ade80)">
   <h2><span class="en">ALL-IN-ONE</span>総合判断 — 4つを貼って一度に判定</h2>
   <p class="hint" style="margin-top:-4px">出走表・直前情報・オッズ履歴・直前オッズを、それぞれ下の欄に貼り付けてください。オッズ履歴・直前オッズは省略しても、出走表と直前情報だけで判定します。</p>
+  <div id="tlBox" style="margin-bottom:8px;padding:8px 10px;border:1px solid var(--line);border-radius:8px">
+    <div class="row" style="gap:8px;flex-wrap:wrap;align-items:center">
+      <b style="font-size:13px">締切タイムライン</b>
+      <button onclick="loadTimeline(true)" style="font-size:12px">今日のレースを読み込む</button>
+      <label style="font-size:12px"><input type="checkbox" id="tlPast" onchange="renderTimeline()"> 締切済みも表示</label>
+      <span class="msg" id="tlMsg" style="font-size:12px"></span>
+    </div>
+    <div class="hint" style="font-size:11px;margin:4px 0 6px">レースを押すと、会場・R・開催日を選んで「自動取得して判定」まで行います。</div>
+    <div id="tlList" style="display:flex;flex-wrap:wrap;gap:6px;max-height:240px;overflow-y:auto"></div>
+  </div>
   <div class="row" style="gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:6px">
     <label style="font-size:12px">会場</label><select id="comboVenue" onchange="renderComboLinks()"></select>
     <label style="font-size:12px">R</label><select id="comboRno" onchange="renderComboLinks()" style="width:64px"></select>
@@ -120,7 +130,7 @@ footer{margin-top:28px;font-size:12px;color:var(--faint);border-top:1px solid va
   <details id="stadiumCombo" class="stadium" style="font-size:12px;margin-bottom:8px"><summary>レース場データ(コース別成績・決まり手・季節)</summary><div class="sbody"></div></details>
   <div class="row" style="gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:8px">
     <button class="primary" onclick="autoFetchCombo(false)">①②④を自動取得</button>
-    <button onclick="autoFetchCombo(true)">自動取得して判定</button> <span class="hint" style="font-size:11px;opacity:.6">自動取得 版2026-10-12d</span>
+    <button onclick="autoFetchCombo(true)">自動取得して判定</button> <span class="hint" style="font-size:11px;opacity:.6">自動取得 版2026-10-25</span>
     <span class="msg" id="autoMsg" style="font-size:12px"></span>
     <details style="font-size:12px;width:100%"><summary style="cursor:pointer;color:var(--faint)">自動取得の設定(中継のURLと鍵)</summary>
       <div class="row" style="gap:6px;flex-wrap:wrap;align-items:center;margin-top:6px">
@@ -384,7 +394,8 @@ footer{margin-top:28px;font-size:12px;color:var(--faint);border-top:1px solid va
 
   <div id="pane4" style="display:none">
     <p class="hint">各競走場の公式サイト(BOATRACE公式サイトとは別)の「直前情報」ページで、オリジナル展示データ(一周・まわり足・直線タイム)が表示されている状態で全選択コピーして貼り付けてください。<br>
-    <b>公式サイト(boatrace.jp)には無いデータです。</b>提供していない場(江戸川など)もあります。場によって表示形式が違うため、対応していない場では読み取れないことがあります。</p>
+    <b>公式サイト(boatrace.jp)には無いデータです。</b>提供していない場(江戸川など)もあります。<br>
+    <b>桐生・多摩川・びわこ・平和島は、「レースを選んで自動取得」で各場の公式サイトから自動で入ります</b>(平和島は当日分のみ)。それ以外の場は、ここに貼り付けてください。場によって表示形式が違うため、対応していない場では読み取れないことがあります。</p>
     <textarea id="paste4" placeholder="各場公式サイトの「直前情報」ページ(オリジナル展示データ)を貼り付け" style="min-height:120px"></textarea>
     <div class="row" style="margin-top:8px"><button class="primary" onclick="parseOriginal()">オリジナル展示を解析</button><span class="msg" id="msg4"></span></div>
     <div class="tblwrap" style="margin-top:10px"><table id="origTable"></table></div>
@@ -3132,6 +3143,125 @@ function htmlToPasteText(html){
   const extra=[...html.matchAll(/img_boat2_\d\.png/g)].map(m=>m[0]).join(" ")+" "+[...html.matchAll(/is-wind\d{1,2}\b/g)].map(m=>m[0]).join(" ");
   return t.replace(/\n{3,}/g,"\n\n")+(extra.trim()?"\n\n(自動取得: "+extra.trim()+")":"");
 }
+/* ── オリジナル展示(一周・まわり足・直線)を各場の公式サイトから取る ──
+   過去の日付も見られる場(桐生・多摩川・びわこ)と、当日分だけの場(平和島)。ボートレース日和は規約で自動取得が禁止のため使わない */
+const ORITEN_SITES={
+  1:{n:"桐生",kind:"half",u:(d,r)=>`https://www.kiryu-kyotei.com/modules/yosou/cyokuzen.php?day=${d}&race=${r}&if=1&kind=2`},
+  5:{n:"多摩川",kind:"full",u:(d,r)=>`https://www.boatrace-tamagawa.com/modules/yosou/oriten.php?day=${d}&race=${r}&jo=05&if=1`},
+  11:{n:"びわこ",kind:"full",u:(d,r)=>`https://www.boatrace-biwako.jp/modules/yosou/cyokuzen.php?day=${d}&race=${r}&if=1&kind=2`},
+  4:{n:"平和島",kind:"full",today:true,u:(d,r)=>`https://www.heiwajima.gr.jp/asp/kyogi/04/pc/yoso05${String(r).padStart(2,"0")}.htm`},
+};
+/* 表の1艇1行から「一周(半周)・まわり足・直線」の3連続を探し、展示タイムはその直前か直後の値を使う(場によって列の順が違うため) */
+function parseOritenHtml(html,kind){
+  const doc=new DOMParser().parseFromString(html.replace(/<script[\s\S]*?<\/script>/gi,""),"text/html");
+  const num=s=>{ const f=parseFloat(s); return isNaN(f)?null:f; };
+  const [lo,hi]=kind==="half"?[15,22]:[33,45];
+  const inr=(v,a,b)=>v!==null&&v>=a&&v<=b, dash=s=>/^[-－]?$/.test(s);
+  const rows=[null,null,null,null,null,null];
+  doc.querySelectorAll("tr").forEach(tr=>{
+    const c=[...tr.children].map(x=>x.textContent.replace(/\s+/g,""));
+    if(!c.length||!/^[1-6]$/.test(c[0])) return;
+    const lane=+c[0]; if(rows[lane-1]) return;
+    const tb=((c[1]||"").match(/\d{4}/)||[])[0]||null;
+    for(let i=2;i<c.length-2;i++){
+      const a=num(c[i]),b=num(c[i+1]),d=num(c[i+2]);
+      const ok=(inr(a,lo,hi)||dash(c[i]))&&(inr(b,3,9)||dash(c[i+1]))&&(inr(d,5,10)||dash(c[i+2]));
+      if(!ok||[a,b,d].filter(v=>v!==null).length<2) continue;
+      const pre=num(c[i-1]), post=num(c[i+3]);
+      const ex=inr(pre,6.2,7.6)?pre:(inr(post,6.2,7.6)?post:null);
+      if(ex===null) continue;
+      rows[lane-1]={toban:tb,ex,lap:a,turn:b,straight:d}; break;
+    }
+  });
+  return rows;
+}
+async function fetchOriten(get,vCode,rNo,dYmd,progText){
+  const S=ORITEN_SITES[vCode]; if(!S) return "この場は未対応";
+  const today=new Date(); const tY=`${today.getFullYear()}${String(today.getMonth()+1).padStart(2,"0")}${String(today.getDate()).padStart(2,"0")}`;
+  if(S.today&&dYmd!==tY) return `${S.n}は当日分のみ公開`;
+  let h; try{ h=await get(S.u(dYmd,rNo)); }catch(e){ return /403|not allowed/.test(e.message)?"中継が古い版です(kyotei-proxy-worker.js を貼り直してください)":e.message; }
+  const rows=parseOritenHtml(h,S.kind);
+  const got=rows.filter(x=>x);
+  if(got.length<4) return "まだ出ていません";
+  /* 当日分だけの場は、別のレースや別の日を取っていないか、出走表の登番と照らし合わせる */
+  if(progText){ const hit=got.filter(x=>x.toban&&progText.includes(x.toban)).length; if(hit<Math.min(4,got.length)) return "別レースのデータでした(未更新)"; }
+  const f=v=>v===null||v===undefined?"-":String(v);
+  const line=(lab,k)=>lab+"\t"+rows.map(r=>r?f(r[k]):"-").join(" ");
+  document.getElementById("paste4").value=`(自動取得: ${S.n} 公式サイトのオリジナル展示${S.kind==="half"?"・一周は半周の値":""})\n`
+    +[line("展示","ex"),line("周回","lap"),line("周り足","turn"),line("直線","straight")].join("\n");
+  try{ parseOriginal(); }catch(e){ return "読み取りに失敗しました"; }
+  window.__oritenLast={v:vCode,r:rNo,d:dYmd,rows};
+  return "ok";
+}
+/* ── 締切タイムライン: 今日の全場・全レースの締切を並べ、押したレースをそのまま自動取得して判定する ──
+   公式の「本日のレース」で開催場を調べ、各場の1R出走表にある「締切予定時刻」12個を読む(1場1回・計15回ほど)。
+   締切時刻はその日のうちは変わらないので、ブラウザに保存して同じ日は読み直さない */
+let TL=[], tlTimer=null;
+function todayYmd(){ const n=new Date(); return `${n.getFullYear()}${String(n.getMonth()+1).padStart(2,"0")}${String(n.getDate()).padStart(2,"0")}`; }
+async function proxyGet(url){
+  const pu=(document.getElementById("proxyUrl").value||"").trim().replace(/\/$/,""), pk=(document.getElementById("proxyKey").value||"").trim();
+  if(!pu) throw new Error("先に「自動取得の設定」で中継のURLと鍵を入れてください");
+  let r; try{ r=await fetch(`${pu}/?key=${encodeURIComponent(pk)}&url=${encodeURIComponent(url)}&t=${Date.now()}`,{cache:"no-store"}); }
+  catch(e){ throw new Error("中継につながりません"); }
+  if(r.status===401) throw new Error("鍵が違います");
+  if(!r.ok) throw new Error("取得に失敗しました("+r.status+")");
+  return r.text();
+}
+function plainText(html){ return html.replace(/<script[\s\S]*?<\/script>/gi," ").replace(/<style[\s\S]*?<\/style>/gi," ").replace(/<[^>]+>/g," ").normalize("NFKC").replace(/\s+/g," "); }
+async function loadTimeline(force){
+  const msg=document.getElementById("tlMsg"), put=(t,ok)=>{ msg.textContent=t; msg.className="msg "+(ok?"ok":"err"); };
+  const hd=todayYmd();
+  if(!force){ try{ const c=JSON.parse(localStorage.getItem("kyoteiTL")||"null"); if(c&&c.hd===hd&&c.list&&c.list.length){ TL=c.list; renderTimeline(); put(`${new Set(TL.map(x=>x.v)).size}場・${TL.length}レース(保存分)`,true); } }catch(e){}
+    return; }   /* 開いただけでは取りに行かない(保存分があれば表示するだけ) */
+  put("開催場を確認中…",true);
+  let codes=[];
+  try{ const h=await proxyGet(`https://www.boatrace.jp/owpc/pc/race/index?hd=${hd}`);
+    codes=[...new Set([...h.matchAll(/raceindex\?jcd=(\d{2})/g)].map(m=>+m[1]))]; }
+  catch(e){ put(e.message,false); return; }
+  if(!codes.length){ put("今日の開催が見つかりませんでした",false); return; }
+  const list=[], miss=[];
+  for(let i=0;i<codes.length;i++){
+    const v=codes[i]; put(`締切時刻を取得中… ${VENMAP[v]}(${i+1}/${codes.length})`,true);
+    try{ const t=plainText(await proxyGet(`https://www.boatrace.jp/owpc/pc/race/racelist?rno=1&jcd=${String(v).padStart(2,"0")}&hd=${hd}`));
+      const m=t.match(/締切予定時刻((?:\s*\d{1,2}:\d{2}){1,12})/);
+      const dls=m?m[1].match(/\d{1,2}:\d{2}/g):[];
+      if(!dls.length) miss.push(VENMAP[v]);
+      dls.forEach((d,k)=>list.push({v,r:k+1,dl:d}));
+    }catch(e){ miss.push(VENMAP[v]); }
+    await new Promise(r=>setTimeout(r,400));   /* 公式サイトに負担をかけないよう少し間をあける */
+  }
+  const mins=d=>{ const [h,m]=d.split(":").map(Number); return h*60+m; };
+  list.sort((a,b)=>mins(a.dl)-mins(b.dl)||a.v-b.v);
+  TL=list; try{ localStorage.setItem("kyoteiTL",JSON.stringify({hd,list})); }catch(e){}
+  renderTimeline();
+  put(`${codes.length-miss.length}場・${list.length}レースを読み込みました`+(miss.length?`(読めなかった場: ${miss.join("・")})`:""),!miss.length);
+}
+function renderTimeline(){
+  const el=document.getElementById("tlList"); if(!el) return;
+  if(!TL.length){ el.innerHTML=""; return; }
+  const now=new Date(), nm=now.getHours()*60+now.getMinutes()+now.getSeconds()/60;
+  const showPast=(document.getElementById("tlPast")||{}).checked;
+  const cur=(document.getElementById("comboVenue")||{}).value+"-"+(document.getElementById("comboRno")||{}).value;
+  const items=TL.map(x=>{ const [h,m]=x.dl.split(":").map(Number); return {...x,left:h*60+m-nm}; }).filter(x=>showPast||x.left>-1);
+  if(!items.length){ el.innerHTML='<span class="hint" style="font-size:12px">今日のレースはすべて締切済みです</span>'; return; }
+  el.innerHTML=items.map(x=>{
+    const near=x.left>=0&&x.left<=10, past=x.left<0, sel=cur===VENMAP[x.v]+"-"+x.r;
+    const left=past?"締切済":(x.left<1?"まもなく":`あと${Math.floor(x.left)}分`);
+    const bg=sel?"var(--acc,#4ade80)":(near?"rgba(74,222,128,.18)":"transparent");
+    return `<button onclick="pickTimeline(${x.v},${x.r})" style="font-size:12px;padding:4px 8px;border:1px solid var(--line);border-radius:6px;background:${bg};${past?"opacity:.45;":""}${sel?"color:#06240f;":""}text-align:left;line-height:1.3">`
+      +`<b>${x.dl}</b> ${VENMAP[x.v]} ${x.r}R<br><span style="font-size:11px;${sel?"":"color:var(--faint)"}">${left}</span></button>`;
+  }).join("");
+}
+function pickTimeline(v,r){
+  const n=new Date();
+  document.getElementById("comboVenue").value=VENMAP[v];
+  document.getElementById("comboRno").value=String(r);
+  document.getElementById("comboDate2").value=`${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,"0")}-${String(n.getDate()).padStart(2,"0")}`;
+  try{ renderComboLinks(); }catch(e){}
+  renderTimeline();
+  autoFetchCombo(true);
+}
+(function(){ try{ loadTimeline(false); }catch(e){} tlTimer=setInterval(()=>{ try{ renderTimeline(); }catch(e){} },30000); })();
 async function autoFetchCombo(andJudge){
   const msg=document.getElementById("autoMsg"), put=(t,ok)=>{ msg.textContent=t; msg.className="msg "+(ok?"ok":"err"); };
   const pu=(document.getElementById("proxyUrl").value||"").trim().replace(/\/$/,""), pk=(document.getElementById("proxyKey").value||"").trim();
@@ -3151,6 +3281,7 @@ async function autoFetchCombo(andJudge){
     return r.text(); };
   put("取得中…",true);
   const res={};
+  origData=[null,null,null,null,null,null]; document.getElementById("paste4").value=""; (document.getElementById("origTable")||{}).innerHTML="";   /* 前のレースのオリジナル展示を残さない */
   for(const [k,id] of [["prog","comboProg"],["choku","comboChoku"],["odds","comboFinal"]]){
     document.getElementById(id).value="";   /* 前のレースの中身が残って別レースで判定しないよう、先に空にする */
     try{ let h=null, err=null;
@@ -3166,7 +3297,9 @@ async function autoFetchCombo(andJudge){
       } }
     catch(e){ res[k]=e.message; }
   }
-  const lab={prog:"出走表",choku:"直前情報",odds:"直前オッズ"};
+  { const vC=VENCODE[(document.getElementById("comboVenue")||{}).value], rN=+(document.getElementById("comboRno")||{}).value, dY=((document.getElementById("comboDate2")||{}).value||"").replace(/-/g,"");
+    if(ORITEN_SITES[vC]){ put("オリジナル展示を取得中…",true); res.ori=await fetchOriten(get,vC,rN,dY,document.getElementById("comboProg").value); } }
+  const lab={prog:"出走表",choku:"直前情報",odds:"直前オッズ",ori:"オリジナル展示"};
   const okAll=res.prog==="ok";
   window.__lastAuto=res;
   put(Object.keys(res).map(k=>`${lab[k]}: ${res[k]==="ok"?"取得しました":res[k]}`).join(" / ")+` (${new Date().toLocaleTimeString("ja-JP",{hour:"2-digit",minute:"2-digit",second:"2-digit"})})`,okAll);
