@@ -408,7 +408,7 @@ footer{margin-top:28px;font-size:12px;color:var(--faint);border-top:1px solid va
   <div id="pane4" style="display:none">
     <p class="hint">各競走場の公式サイト(BOATRACE公式サイトとは別)の「直前情報」ページで、オリジナル展示データ(一周・まわり足・直線タイム)が表示されている状態で全選択コピーして貼り付けてください。<br>
     <b>公式サイト(boatrace.jp)には無いデータです。</b>提供していない場(江戸川など)もあります。<br>
-    <b>桐生・多摩川・びわこ・平和島は、「レースを選んで自動取得」で各場の公式サイトから自動で入ります</b>(平和島は当日分のみ)。それ以外の場は、ここに貼り付けてください。場によって表示形式が違うため、対応していない場では読み取れないことがあります。</p>
+    <b>桐生・平和島・多摩川・浜名湖・常滑・三国・びわこ・尼崎・鳴門は、「レースを選んで自動取得」で各場の公式サイトから自動で入ります</b>(平和島は当日分のみ・尼崎は直線なし)。それ以外の場は、ここに貼り付けてください。場によって表示形式が違うため、対応していない場では読み取れないことがあります。</p>
     <textarea id="paste4" placeholder="各場公式サイトの「直前情報」ページ(オリジナル展示データ)を貼り付け" style="min-height:120px"></textarea>
     <div class="row" style="margin-top:8px"><button class="primary" onclick="parseOriginal()">オリジナル展示を解析</button><span class="msg" id="msg4"></span></div>
     <div class="tblwrap" style="margin-top:10px"><table id="origTable"></table></div>
@@ -3175,6 +3175,11 @@ const ORITEN_SITES={
   5:{n:"多摩川",kind:"full",u:(d,r)=>`https://www.boatrace-tamagawa.com/modules/yosou/oriten.php?day=${d}&race=${r}&jo=05&if=1`},
   11:{n:"びわこ",kind:"full",u:(d,r)=>`https://www.boatrace-biwako.jp/modules/yosou/cyokuzen.php?day=${d}&race=${r}&if=1&kind=2`},
   4:{n:"平和島",kind:"full",today:true,u:(d,r)=>`https://www.heiwajima.gr.jp/asp/kyogi/04/pc/yoso05${String(r).padStart(2,"0")}.htm`},
+  6:{n:"浜名湖",kind:"full",u:(d,r)=>`https://www.boatrace-hamanako.jp/modules/yosou/group-cyokuzen.php?day=${d}&race=${r}&if=1&kind=2`},
+  8:{n:"常滑",kind:"full",u:(d,r)=>`https://www.boatrace-tokoname.jp/modules/yosou/group-cyokuzen.php?day=${d}&race=${r}&if=1&kind=2`},
+  10:{n:"三国",kind:"full",u:(d,r)=>`https://www.boatrace-mikuni.jp/modules/yosou/group-cyokuzen.php?day=${d}&race=${r}&if=1&kind=2`},
+  13:{n:"尼崎",kind:"full",nostraight:true,u:(d,r)=>`https://www.boatrace-amagasaki.jp/modules/yosou/group-cyokuzen.php?day=${d}&race=${r}&if=1&kind=2`},
+  14:{n:"鳴門",kind:"full",u:(d,r)=>`https://www.n14.jp/modules/yosou/group-cyokuzen.php?day=${d}&race=${r}&if=1&kind=2`},
 };
 /* 表の1艇1行から「一周(半周)・まわり足・直線」の3連続を探し、展示タイムはその直前か直後の値を使う(場によって列の順が違うため) */
 function parseOritenHtml(html,kind){
@@ -3187,7 +3192,7 @@ function parseOritenHtml(html,kind){
     const c=[...tr.children].map(x=>x.textContent.replace(/\s+/g,""));
     if(!c.length||!/^[1-6]$/.test(c[0])) return;
     const lane=+c[0]; if(rows[lane-1]) return;
-    const tb=((c[1]||"").match(/\d{4}/)||[])[0]||null;
+    const tb=((c[1]||"").match(/(?:[AB][12])?(\d{4})/)||[])[1]||null;   /* 「B15183」のように級と登番がつながる場がある */
     for(let i=2;i<c.length-2;i++){
       const a=num(c[i]),b=num(c[i+1]),d=num(c[i+2]);
       const ok=(inr(a,lo,hi)||dash(c[i]))&&(inr(b,3,9)||dash(c[i+1]))&&(inr(d,5,10)||dash(c[i+2]));
@@ -3197,6 +3202,10 @@ function parseOritenHtml(html,kind){
       if(ex===null) continue;
       rows[lane-1]={toban:tb,ex,lap:a,turn:b,straight:d}; break;
     }
+    if(rows[lane-1]) return;
+    /* 直線が無い場(尼崎など): 展示 → 一周 → まわり足 */
+    for(let i=2;i<c.length-2;i++){ const ex=num(c[i]),a=num(c[i+1]),b=num(c[i+2]);
+      if(inr(ex,6.2,7.6)&&inr(a,lo,hi)&&(inr(b,3,15)||dash(c[i+2]))){ rows[lane-1]={toban:tb,ex,lap:a,turn:b,straight:null}; break; } }
   });
   return rows;
 }
@@ -3210,9 +3219,10 @@ async function fetchOriten(get,vCode,rNo,dYmd,progText){
   if(got.length<4) return "まだ出ていません";
   /* 当日分だけの場は、別のレースや別の日を取っていないか、出走表の登番と照らし合わせる */
   if(progText){ const hit=got.filter(x=>x.toban&&progText.includes(x.toban)).length; if(hit<Math.min(4,got.length)) return "別レースのデータでした(未更新)"; }
+  if(S.nostraight) rows.forEach(r=>{ if(r&&r.straight==null) r.straight=7.00; });   /* 直線を測っていない場は同じ値を入れて差が出ないようにする */
   const f=v=>v===null||v===undefined?"-":String(v);
   const line=(lab,k)=>lab+"\t"+rows.map(r=>r?f(r[k]):"-").join(" ");
-  document.getElementById("paste4").value=`(自動取得: ${S.n} 公式サイトのオリジナル展示${S.kind==="half"?"・一周は半周の値":""})\n`
+  document.getElementById("paste4").value=`(自動取得: ${S.n} 公式サイトのオリジナル展示${S.kind==="half"?"・一周は半周の値":""}${S.nostraight?"・直線は計測なし":""})\n`
     +[line("展示","ex"),line("周回","lap"),line("周り足","turn"),line("直線","straight")].join("\n");
   try{ parseOriginal(); }catch(e){ return "読み取りに失敗しました"; }
   window.__oritenLast={v:vCode,r:rNo,d:dYmd,rows};
