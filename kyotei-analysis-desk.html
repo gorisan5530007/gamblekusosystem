@@ -121,6 +121,19 @@ footer{margin-top:28px;font-size:12px;color:var(--faint);border-top:1px solid va
     <div class="hint" style="font-size:11px;margin:4px 0 6px">レースを押すと、会場・R・開催日を選んで「自動取得して判定」まで行います。</div>
     <div id="tlList" style="display:flex;flex-wrap:wrap;gap:6px;max-height:240px;overflow-y:auto"></div>
   </div>
+  <details id="slitBox" style="margin-bottom:8px;padding:8px 10px;border:1px solid var(--line);border-radius:8px;font-size:13px">
+    <summary style="cursor:pointer"><b>スリット写真から通過速度を測る</b> <span class="hint" style="font-size:11px">(試験中・まだ効果は検証していません)</span></summary>
+    <div class="hint" style="font-size:11px;margin:6px 0">スタート展示写真(本物のスリット写真)のスクリーンショットを読み込むと、0.1秒の緑線を目盛りにして、各艇がスタートラインを通過した速さを測ります。スリット写真は横方向が時間なので、速く通過した艇ほど短く写ります。写真の上から順に1〜6コースとして扱い、進入は下の入力(スタート展示)に合わせて艇番に直します。</div>
+    <div class="row" style="gap:8px;flex-wrap:wrap;align-items:center">
+      <input type="file" id="slitFile" accept="image/*" onchange="slitLoad(this.files[0])" style="font-size:12px">
+      <button onclick="slitManual()" style="font-size:12px">手で測り直す</button>
+      <button onclick="slitExport()" style="font-size:12px">記録をCSVで保存</button>
+      <span class="msg" id="slitMsg" style="font-size:12px"></span>
+    </div>
+    <div class="hint" style="font-size:11px;margin-top:4px">手で測り直すときは、写真の上の艇から順に「モーターの後ろの端 → 艇首の先」を2回ずつ押してください。</div>
+    <div style="overflow-x:auto;margin-top:6px"><canvas id="slitCanvas" style="max-width:100%;display:none;touch-action:manipulation"></canvas></div>
+    <div id="slitOut" style="margin-top:6px"></div>
+  </details>
   <div class="row" style="gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:6px">
     <label style="font-size:12px">会場</label><select id="comboVenue" onchange="renderComboLinks()"></select>
     <label style="font-size:12px">R</label><select id="comboRno" onchange="renderComboLinks()" style="width:64px"></select>
@@ -3193,6 +3206,122 @@ async function fetchOriten(get,vCode,rNo,dYmd,progText){
   window.__oritenLast={v:vCode,r:rNo,d:dYmd,rows};
   return "ok";
 }
+/* ── スリット写真から通過速度を測る ──
+   スリット写真はスタートラインの真上1列を時間をずらして並べた画像で、横方向が時間。艇の長さ(約3m)は同じなので、
+   写真上で短い艇ほど速く通過している。0.1秒ごとの緑の縦線の間隔から「1秒あたりのピクセル数」を出し、
+   各艇の「モーターの後ろの端〜艇首」のピクセル数から通過時間と速さを計算する */
+const SLIT={img:null,W:0,H:0,pp:0,boats:[],manual:null,scale:1};
+function slitLoad(file){
+  if(!file) return;
+  const msg=document.getElementById("slitMsg");
+  const img=new Image();
+  img.onload=()=>{ SLIT.img=img; try{ slitAnalyze(); }catch(e){ msg.textContent="読み取りに失敗しました: "+e.message; msg.className="msg err"; console.warn(e); } };
+  img.src=URL.createObjectURL(file);
+}
+function slitAnalyze(){
+  const img=SLIT.img, cv=document.getElementById("slitCanvas"), ctx=cv.getContext("2d",{willReadFrequently:true});
+  const W=img.naturalWidth, H=img.naturalHeight; cv.width=W; cv.height=H; ctx.drawImage(img,0,0);
+  const D=ctx.getImageData(0,0,W,H).data, px=(x,y)=>(y*W+x)*4, lum=(x,y)=>{const i=px(x,y); return (D[i]+D[i+1]+D[i+2])/3;};
+  /* 上下の白い横線(写真の枠)を探す */
+  const railRows=[]; for(let y=0;y<H;y++){ let c=0; for(let x=0;x<W;x+=4) if(lum(x,y)>170) c++; if(c/(W/4)>0.6) railRows.push(y); }
+  const up=railRows.filter(y=>y<H*0.3), dn=railRows.filter(y=>y>H*0.7);
+  const top=up.length?Math.max(...up)+3:Math.round(H*0.12), bot=dn.length?Math.min(...dn)-3:Math.round(H*0.95);
+  const rr=up.length?Math.max(...up):top; let x0=W,x1=0; for(let x=0;x<W;x++) if(lum(x,rr)>150){ x0=Math.min(x0,x); x1=Math.max(x1,x); }
+  if(x1-x0<W*0.3){ x0=0; x1=W-1; } x0+=2; x1-=2;
+  /* 緑の時間線 */
+  const gcol=[]; for(let x=x0;x<=x1;x++){ let c=0,n=0; for(let y=top;y<bot;y+=3){ const i=px(x,y); n++; if(D[i+1]-Math.max(D[i],D[i+2])>40&&D[i+1]>100) c++; } if(c/n>0.3) gcol.push(x); }
+  const grp=[]; gcol.forEach(x=>{ if(grp.length&&x-grp[grp.length-1][grp[grp.length-1].length-1]<=3) grp[grp.length-1].push(x); else grp.push([x]); });
+  const cent=grp.map(g=>g.reduce((a,b)=>a+b,0)/g.length), sp=[]; for(let i=1;i<cent.length;i++) sp.push(cent[i]-cent[i-1]);
+  if(sp.length<3) throw new Error("0.1秒の緑線が見つかりません(本物のスリット写真ではない可能性)");
+  const med=[...sp].sort((a,b)=>a-b)[Math.floor(sp.length/2)], good=sp.filter(v=>v>0.8*med&&v<1.2*med);
+  const pp=good.reduce((a,b)=>a+b,0)/good.length; SLIT.pp=pp;
+  const mask=new Uint8Array(W); grp.forEach(g=>{ for(let x=g[0]-7;x<=g[g.length-1]+7;x++) if(x>=0&&x<W) mask[x]=1; });
+  for(let x=x0;x<=x1;x++){ let c=0,n=0; for(let y=top;y<bot;y+=3){ n++; if(lum(x,y)>190) c++; } if(c/n>0.5) for(let k=x-8;k<=x+8;k++) if(k>=0&&k<W) mask[k]=1; }
+  /* 水面の色(中央値) */
+  const smp=[]; for(let k=0;k<4000;k++){ const x=x0+Math.floor(Math.random()*(x1-x0)), y=top+Math.floor(Math.random()*(bot-top)); const i=px(x,y); smp.push([D[i],D[i+1],D[i+2]]); }
+  const medc=c=>{ const a=smp.map(v=>v[c]).sort((p,q)=>p-q); return a[a.length>>1]; }, wr=medc(0),wg=medc(1),wb=medc(2);
+  const dw=(x,y)=>{ const i=px(x,y); return Math.hypot(D[i]-wr,D[i+1]-wg,D[i+2]-wb); };
+  /* 各行の「水面でない一番右の点」(=艇首の候補) */
+  const PH=bot-top, right=new Int32Array(PH).fill(-1), xl=Math.round(x0+(x1-x0)*0.15), xr=Math.round(x1-(x1-x0)*0.015);
+  for(let y=0;y<PH;y++){ for(let x=xr;x>=xl;x--){ if(mask[x]) continue; if(dw(x,y+top)>60){ right[y]=x; break; } } }
+  /* 横方向の色の変化の大きさ(艇体は細かく変化し、引き波は横に流れた筋なので変化が小さい) */
+  const gx=(x,y)=>{ const i=px(x,y),j=px(x+1,y); return Math.abs(D[i]-D[j])+Math.abs(D[i+1]-D[j+1])+Math.abs(D[i+2]-D[j+2]); };
+  const rowE=new Float32Array(PH);
+  for(let y=0;y<PH;y++){ const r=right[y]; if(r<0) continue; let s2=0,n=0; for(let x=Math.max(x0,r-Math.round(pp*1.2));x<=r;x++){ if(mask[x]) continue; s2+=gx(x,y+top); n++; } rowE[y]=n?s2/n:0; }
+  const sorted=[...rowE].sort((a,b)=>a-b), thr=sorted[Math.floor(PH*0.7)];
+  const bands=[]; let st=null; for(let y=0;y<PH;y++){ const on=rowE[y]>thr; if(on&&st===null) st=y; if(!on&&st!==null){ if(y-st>=Math.round(pp*0.12)) bands.push([st,y]); st=null; } }
+  const boats=[];
+  bands.forEach(([a,b])=>{
+    if(b+top>bot-(bot-top)*0.06) return;   /* 下の端のロゴなどは除く */
+    const seg=[]; for(let y=a;y<b;y++) if(right[y]>0) seg.push(right[y]); if(!seg.length) return;
+    seg.sort((p,q)=>p-q); const bow=seg[Math.floor(seg.length*0.9)];
+    const band0=new Float32Array(W); for(let x=x0;x<=bow;x++){ if(mask[x]) continue; let s3=0; for(let y=a;y<b;y++) s3+=gx(x,y+top); band0[x]=s3/(b-a); }
+    /* 時間線の上は値が取れないので、両側の値から直線で埋める */
+    for(let x=x0;x<=bow;x++){ if(!mask[x]) continue; let l=x; while(l>x0&&mask[l]) l--; let r=x; while(r<bow&&mask[r]) r++;
+      const vl=mask[l]?band0[r]:band0[l], vr=mask[r]?band0[l]:band0[r]; for(let k=l+1;k<r;k++) band0[k]=vl+(vr-vl)*(k-l)/(r-l); x=r; }
+    const band=new Float32Array(W); for(let x=x0;x<=bow;x++){ let s4=0,n4=0; for(let k=-3;k<=3;k++){ const xx=x+k; if(xx<x0||xx>bow) continue; s4+=band0[xx]; n4++; } band[x]=n4?s4/n4:0; }   /* 横に7px平均(引き波の細かいちらつきを消す) */
+    const win=[]; for(let x=Math.max(x0,bow-Math.round(pp*2));x<=bow;x++) win.push(band[x]); win.sort((p,q)=>p-q);
+    const ht=win[Math.floor(win.length*0.6)]*0.5;
+    let x=bow,gap=0,left=bow; while(x>x0){ if(band[x]>ht){ left=x; gap=0; } else if(++gap>pp*0.1) break; x--; }
+    if(bow-left>pp*0.8) boats.push({y:Math.round((a+b)/2)+top,bow,stern:left});
+  });
+  SLIT.boats=boats.slice(0,6); SLIT.manual=null; SLIT.manualDone=false;
+  /* 表示は艇のまわりだけを切り出して大きく見せる(スマホで印を確認・手で測りやすくするため) */
+  if(boats.length){ const sx=Math.max(0,Math.min(...boats.map(b=>b.stern))-pp*1.2), ex=Math.min(W,Math.max(...boats.map(b=>b.bow))+pp*0.6);
+    SLIT.crop=[Math.round(sx),top,Math.round(ex-sx),bot-top]; } else SLIT.crop=[0,0,W,H];
+  slitRender();
+}
+function slitRender(){
+  const cv=document.getElementById("slitCanvas"), ctx=cv.getContext("2d"); cv.style.display="";
+  const [cx,cy,cw,ch]=SLIT.crop||[0,0,SLIT.img.naturalWidth,SLIT.img.naturalHeight];
+  cv.width=cw; cv.height=ch; ctx.drawImage(SLIT.img,cx,cy,cw,ch,0,0,cw,ch); ctx.save(); ctx.translate(-cx,-cy);
+  const msg=document.getElementById("slitMsg"), out=document.getElementById("slitOut"), pp=SLIT.pp, B=SLIT.boats;
+  ctx.lineWidth=Math.max(2,cv.width/600);
+  B.forEach((b,k)=>{ ctx.strokeStyle="#ff2bd6"; ctx.beginPath(); ctx.moveTo(b.stern,b.y-14); ctx.lineTo(b.stern,b.y+14); ctx.moveTo(b.bow,b.y-14); ctx.lineTo(b.bow,b.y+14); ctx.moveTo(b.stern,b.y); ctx.lineTo(b.bow,b.y); ctx.stroke();
+    ctx.fillStyle="#ff2bd6"; ctx.font=`${Math.max(14,Math.round(cw/25))}px sans-serif`; ctx.fillText(`${k+1}`,b.bow+6,b.y+8); });
+  ctx.restore();
+  if(B.length<6){ msg.textContent=`${B.length}艇しか読み取れませんでした。「手で測り直す」で測ってください`; msg.className="msg err"; }
+  else { msg.textContent=`6艇を読み取りました(0.1秒=${pp.toFixed(0)}px)。印がずれていれば「手で測り直す」`; msg.className="msg ok"; }
+  if(!B.length){ out.innerHTML=""; return; }
+  const crs=[1,2,3,4,5,6].map(i=>parseInt((document.getElementById("crs"+i)||{}).value)||i);
+  const laneOf=c=>{ const i=crs.indexOf(c); return i>=0?i+1:c; };
+  const t=B.map(b=>(b.bow-b.stern)/pp*0.1), avg=t.reduce((a,b)=>a+b,0)/t.length;
+  const BOAT_M=3.0;   /* モーターを含む艇の長さの目安(速さの絶対値は目安。艇どうしの比較は長さに関係なく正確) */
+  out.innerHTML=`<div style="overflow-x:auto"><table style="font-size:12px"><thead><tr><th>コース</th><th>艇番</th><th class="num">写真上の長さ</th><th class="num">通過時間</th><th class="num">速さの目安</th><th class="num">平均との差</th></tr></thead><tbody>`
+    +B.map((b,k)=>{ const tt=t[k], d=(avg/tt-1)*100;
+      return `<tr><td>${k+1}</td><td>${laneOf(k+1)}号艇</td><td class="num">${b.bow-b.stern}px</td><td class="num">${tt.toFixed(3)}秒</td><td class="num">${(BOAT_M/tt*3.6).toFixed(1)}km/h</td><td class="num ${d>=1?"evpos":(d<=-1?"evneg":"")}">${d>=0?"+":""}${d.toFixed(1)}%</td></tr>`; }).join("")
+    +`</tbody></table></div><div class="hint" style="font-size:11px">+は平均より速い。外のコースほど助走が長く速くなるのが普通なので、「そのコースにしては速いか」で見てください。測り方の誤差は1〜2%ほどあります。</div>`;
+  /* 記録(検証用) */
+  try{ const v=(document.getElementById("comboVenue")||{}).value||"", r=(document.getElementById("comboRno")||{}).value||"", d=(document.getElementById("comboDate2")||{}).value||"";
+    const L=JSON.parse(localStorage.getItem("kyoteiSlit")||"[]"), key=`${d}|${v}|${r}`;
+    const rec={key,d,v,r,at:new Date().toISOString(),manual:!!SLIT.manualDone,pp:+pp.toFixed(1),rows:B.map((b,k)=>({c:k+1,lane:laneOf(k+1),len:b.bow-b.stern,t:+t[k].toFixed(4)}))};
+    const i=L.findIndex(x=>x.key===key); if(i>=0) L[i]=rec; else L.push(rec);
+    localStorage.setItem("kyoteiSlit",JSON.stringify(L.slice(-2000))); }catch(e){}
+}
+function slitManual(){
+  if(!SLIT.img){ document.getElementById("slitMsg").textContent="先に写真を読み込んでください"; return; }
+  const cv=document.getElementById("slitCanvas"); SLIT.manual=[]; SLIT.manualDone=false; SLIT.boats=[];
+  if(!SLIT.crop) SLIT.crop=[0,0,SLIT.img.naturalWidth,SLIT.img.naturalHeight];
+  document.getElementById("slitMsg").textContent="上の艇から順に「モーターの後ろの端 → 艇首の先」を押してください(1艇目の後ろの端)"; document.getElementById("slitMsg").className="msg ok";
+  cv.onclick=e=>{
+    if(!SLIT.manual) return;
+    const r=cv.getBoundingClientRect(), lx=(e.clientX-r.left)*cv.width/r.width, ly=(e.clientY-r.top)*cv.height/r.height;
+    const x=lx+SLIT.crop[0], y=ly+SLIT.crop[1];
+    SLIT.manual.push([x,y]); const n=SLIT.manual.length, ctx=cv.getContext("2d");
+    ctx.fillStyle="#ffd400"; ctx.beginPath(); ctx.arc(lx,ly,Math.max(4,cv.width/150),0,7); ctx.fill();
+    if(n%2===0){ const [a,b]=SLIT.manual.slice(-2); const k=n/2-1; SLIT.boats[k]={y:Math.round((a[1]+b[1])/2),stern:Math.round(Math.min(a[0],b[0])),bow:Math.round(Math.max(a[0],b[0]))}; }
+    if(n>=12){ SLIT.boats=SLIT.boats.slice(0,6); SLIT.manual=null; SLIT.manualDone=true; cv.onclick=null; slitRender(); return; }
+    document.getElementById("slitMsg").textContent=`${Math.floor(n/2)+1}艇目の${n%2===0?"モーターの後ろの端":"艇首の先"}を押してください`;
+  };
+}
+function slitExport(){
+  let L=[]; try{ L=JSON.parse(localStorage.getItem("kyoteiSlit")||"[]"); }catch(e){}
+  if(!L.length){ document.getElementById("slitMsg").textContent="まだ記録がありません"; return; }
+  const rows=["date,venue,race,course,lane,len_px,time_s,px_per_0.1s,manual"];
+  L.forEach(x=>x.rows.forEach(r=>rows.push([x.d,x.v,x.r,r.c,r.lane,r.len,r.t,x.pp,x.manual?1:0].join(","))));
+  const blob=new Blob(["\ufeff"+rows.join("\n")],{type:"text/csv"}); const a=document.createElement("a");
+  a.href=URL.createObjectURL(blob); a.download="slit_records.csv"; a.click();
+}
 /* ── 締切タイムライン: 今日の全場・全レースの締切を並べ、押したレースをそのまま自動取得して判定する ──
    公式の「本日のレース」で開催場を調べ、各場の1R出走表にある「締切予定時刻」12個を読む(1場1回・計15回ほど)。
    締切時刻はその日のうちは変わらないので、ブラウザに保存して同じ日は読み直さない */
@@ -3222,12 +3351,18 @@ async function loadTimeline(force){
   const list=[], miss=[];
   for(let i=0;i<codes.length;i++){
     const v=codes[i]; put(`締切時刻を取得中… ${VENMAP[v]}(${i+1}/${codes.length})`,true);
-    try{ const t=plainText(await proxyGet(`https://www.boatrace.jp/owpc/pc/race/racelist?rno=1&jcd=${String(v).padStart(2,"0")}&hd=${hd}`));
-      const m=t.match(/締切予定時刻((?:\s*\d{1,2}:\d{2}){1,12})/);
-      const dls=m?m[1].match(/\d{1,2}:\d{2}/g):[];
-      if(!dls.length) miss.push(VENMAP[v]);
-      dls.forEach((d,k)=>list.push({v,r:k+1,dl:d}));
-    }catch(e){ miss.push(VENMAP[v]); }
+    /* 公式サイトがときどき断るので、間をあけて3回まで。1Rのページで読めなければ別のRのページでも試す */
+    let dls=[];
+    for(const [k,rn] of [[0,1],[1,1],[2,6]]){
+      try{ const t=plainText(await proxyGet(`https://www.boatrace.jp/owpc/pc/race/racelist?rno=${rn}&jcd=${String(v).padStart(2,"0")}&hd=${hd}`));
+        const m=t.match(/締切予定時刻((?:\s*\d{1,2}:\d{2}){1,12})/);
+        dls=m?m[1].match(/\d{1,2}:\d{2}/g):[];
+      }catch(e){}
+      if(dls.length) break;
+      await new Promise(r=>setTimeout(r,1500*(k+1)));
+    }
+    if(!dls.length) miss.push(VENMAP[v]);
+    dls.forEach((d,k)=>list.push({v,r:k+1,dl:d}));
     await new Promise(r=>setTimeout(r,400));   /* 公式サイトに負担をかけないよう少し間をあける */
   }
   const mins=d=>{ const [h,m]=d.split(":").map(Number); return h*60+m; };
