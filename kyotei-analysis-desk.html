@@ -1148,6 +1148,7 @@ function parseProgram(){
    L2・L3 は kyotei_rating.py が直近180日の着順から推定(無いときは2026年1〜5月の推定値) */
 /* ガチガチの基準: 2着・3着の補正後の確率で判定(2026年6〜10月の確認: 10%以上は全体の約3割、的中13.7%・回収率82%) */
 const GACHI_TH=0.10, COCOMO_TH=0.12;
+const POOL_CUT=1.1;   /* 総合判定: オリ展ありの割安度がこれ未満の目をプール220%から外す */
 function plLam(){ const R=(typeof RATING!=="undefined")?RATING:{}; return [R.L2||0.686, R.L3||0.506]; }
 function plTri(w,i,j,m){
   const [a,b]=plLam(); let t1=0,t2=0,t3=0;
@@ -2987,7 +2988,8 @@ function renderEdgeBox(){
   const q={}; let Q=0;
   keys.forEach(c=>{ const [a,b,d]=c.split("-").map(n=>+n-1); q[c]=inv[c]/T*g[a]*Math.pow(g[b],L2)*Math.pow(g[d],L3); Q+=q[c]; });
   const triC=keys.map(c=>({c,o:parseFloat(oddsMap[c]),r:(q[c]/Q)/(inv[c]/T)})).filter(x=>x.r>=thR&&x.o<=omax).sort((a,b)=>b.r-a.r);
-  window.__edge={useOri,triC:triC.slice(),pm:pm.slice(),pn:pn.slice(),thR,omax,asof:EDGE.asof};   /* 総合判定でも使う */
+  const ratio={}; keys.forEach(c=>{ ratio[c]=(q[c]/Q)/(inv[c]/T); });
+  window.__edge={useOri,triC:triC.slice(),pm:pm.slice(),pn:pn.slice(),thR,omax,asof:EDGE.asof,ratio};   /* 総合判定でも使う */
   const chip=i=>`<span class="chip" style="width:17px;height:17px;font-size:10px;background:${BC[i-1]};color:${BT[i-1]}">${i}</span>`;
   const why=i=>{ const c=MD.feats.map((f,j)=>[f,MD.b[j]*Z[i][j]]).filter(x=>Math.abs(x[1])>=0.03).sort((a,b)=>Math.abs(b[1])-Math.abs(a[1])).slice(0,3);
     const N={mex30:"モーター展示",madj30:"モーター展示",m2:"モーター2連率",exst_vs_usual:"展示ST",mparts:"部品交換",last3:"直近成績",pex10:"選手の展示",
@@ -3765,7 +3767,15 @@ function runComboJudge(){
       +`(蓄積データでの検証: 回収率約82%・約990レース。同じレースでプール220%だけなら約74%)。`;
   }
   scrL.forEach(l=>{ A.delete(l-1); B.delete(l-1); C.delete(l-1); });   /* 欠場艇は買い目に入れない */
-  const combos=combos_(A,B,C);
+  const combosAll=combos_(A,B,C);
+  /* オリ展がそろうときは、オリ展ありの補正で割安度1.1未満(市場が高く見すぎ)の目を外す。
+     検証(2026/4〜10・25,113レース、係数は3月以前で推定): プール220%の全部 83.2% → 1.1以上だけ 96.0%(平均2.9点・買えるのは約6割のレース) */
+  let combos=combosAll, poolCut=null;
+  try{ renderEdgeBox(); }catch(e){}
+  if(window.__edge&&window.__edge.useOri){
+    const R=window.__edge.ratio; combos=combosAll.filter(c=>(R[c]||0)>=POOL_CUT);
+    poolCut={cut:combosAll.filter(c=>!combos.includes(c)),all:combosAll.length};
+  }
   if(chokuOk && (ohOk||Object.keys(OHOFF).length)) calc();   /* オッズを読んだあとで通知を作り直し、先行艇の市場の評価を出す */
 
   const formEl=document.getElementById("formAlert");
@@ -3774,7 +3784,7 @@ function runComboJudge(){
   const leadHit = chokuOk && leadEl && leadEl.style.display!=="none" && leadEl.innerHTML;
   const plain=html=>{ const dv=document.createElement("div"); dv.innerHTML=html||""; dv.querySelectorAll("button").forEach(b=>b.remove()); return dv.textContent.replace(/^🔔\s*/,"").trim(); };
   window.__combo={
-    combos, A:[...A], B:[...B], C:[...C],
+    combos, combosAll, poolCut, A:[...A], B:[...B], C:[...C],
     p1: curPos[0].slice(),
     ohOk, chokuOk,
     best: ohOk? ohNote.match(/伸びた(\d)号艇/)?.[1] : null,
@@ -3819,8 +3829,11 @@ function runComboJudge(){
   if(combos.length){
     h+=`<div style="margin-bottom:6px"><b>買い目(${combos.length}点)</b>: ${combos.join(" / ")}</div>`;
   }else{
-    h+=`<div style="margin-bottom:6px" class="evneg">除外の結果、買い目が残りませんでした(見送り推奨)。</div>`;
+    h+=`<div style="margin-bottom:6px" class="evneg">${poolCut?`オリ展で割安度${POOL_CUT}以上の目が残りませんでした(見送り)。`:"除外の結果、買い目が残りませんでした(見送り推奨)。"}</div>`;
   }
+  if(poolCut) h+=`<div style="font-size:12px;margin-bottom:6px">🔸 オリ展あり: プール220%の${poolCut.all}点から、割安度${POOL_CUT}未満の${poolCut.cut.length}点を外しました${poolCut.cut.length?`(${poolCut.cut.join(" / ")})`:""}。`
+    +`<span style="color:var(--faint)">検証(2026/4〜10・25,113レース): 外す前 83.2% → 外した後 96.0%(90%区間 91〜101%、10月は65%とぶれあり)。オッズ履歴の調整と組み合わせた形は未検証。</span></div>`;
+  else if(window.__edge) h+=`<div style="font-size:12px;color:var(--faint);margin-bottom:6px">オリ展がそろっていないため、割安度での絞り込みはしていません。</div>`;
   h+=`<div style="font-size:12px;color:var(--sub);margin-bottom:8px">`
     +`1着候補 ${[...A].map(chip).join("")}　2着候補 ${[...B].map(chip).join("")}　3着候補 ${[...C].map(chip).join("")}</div>`;
   if(ohNote) h+=`<div style="font-size:12px;margin-bottom:6px">🔹 ${ohNote}</div>`;
