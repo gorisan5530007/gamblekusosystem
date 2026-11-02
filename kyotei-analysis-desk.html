@@ -2970,6 +2970,7 @@ function renderEdgeBox(){
   const el=document.getElementById("edgeBox"); if(!el) return;
   if(typeof EDGE==="undefined"||!EDGE){ el.style.display="none"; return; }
   const keys=Object.keys(oddsMap).filter(c=>parseFloat(oddsMap[c])>0);
+  window.__edge=null;
   if(keys.length<48){ el.style.display=""; el.innerHTML=`<b>オッズ補正(市場にない情報)</b> <span style="color:var(--faint)">3連単オッズを取り込むと表示されます(データ ${EDGE.asof} 時点)</span>`; return; }
   const inv={}; let T=0; keys.forEach(c=>{ inv[c]=1/parseFloat(oddsMap[c]); T+=inv[c]; });
   const pm=[0,0,0,0,0,0]; keys.forEach(c=>{ pm[+c[0]-1]+=inv[c]/T; });
@@ -2986,6 +2987,7 @@ function renderEdgeBox(){
   const q={}; let Q=0;
   keys.forEach(c=>{ const [a,b,d]=c.split("-").map(n=>+n-1); q[c]=inv[c]/T*g[a]*Math.pow(g[b],L2)*Math.pow(g[d],L3); Q+=q[c]; });
   const triC=keys.map(c=>({c,o:parseFloat(oddsMap[c]),r:(q[c]/Q)/(inv[c]/T)})).filter(x=>x.r>=thR&&x.o<=omax).sort((a,b)=>b.r-a.r);
+  window.__edge={useOri,triC:triC.slice(),pm:pm.slice(),pn:pn.slice(),thR,omax,asof:EDGE.asof};   /* 総合判定でも使う */
   const chip=i=>`<span class="chip" style="width:17px;height:17px;font-size:10px;background:${BC[i-1]};color:${BT[i-1]}">${i}</span>`;
   const why=i=>{ const c=MD.feats.map((f,j)=>[f,MD.b[j]*Z[i][j]]).filter(x=>Math.abs(x[1])>=0.03).sort((a,b)=>Math.abs(b[1])-Math.abs(a[1])).slice(0,3);
     const N={mex30:"モーター展示",madj30:"モーター展示",m2:"モーター2連率",exst_vs_usual:"展示ST",mparts:"部品交換",last3:"直近成績",pex10:"選手の展示",
@@ -3834,6 +3836,7 @@ function runComboJudge(){
     }
   }
   if(leadHit) h+=`<div style="margin-top:6px;padding:8px;background:var(--pos);color:#06240f;border-radius:6px;font-size:12px">${leadHit}</div>`;
+  h+=comboEdgeHtml(chip);
   if(chokuOk && window.__boost && window.__boost.html.length){
     h+=`<div style="margin-top:6px;padding:8px 10px;background:var(--panel2);border-radius:6px;font-size:12px;line-height:1.9;color:var(--sub)">`
       +`<div style="font-size:11px;color:var(--faint)">跳ね上がり条件(蓄積データで期間検証済み)</div>`
@@ -3846,6 +3849,24 @@ function runComboJudge(){
   out.innerHTML=h;
   const ng=status.filter(x=>x[1]==="ng").length;
   msg.innerHTML=ng?`<span class="evneg">判定しました(読み取れなかった入力が${ng}件あります)</span>`:'<span class="evpos">総合判定を更新しました</span>';
+}
+/* 総合判定に入れる「オッズ補正」の結果。オリ展がそろえばオリ展ありのモデル(検証で回収率 約98〜100%)の買い目を出す */
+function comboEdgeHtml(chip){
+  try{ renderEdgeBox(); }catch(e){ console.warn(e); }
+  const E=window.__edge;
+  if(window.__combo) window.__combo.edge=E?{useOri:E.useOri,tri:E.triC.map(x=>x.c)}:null;
+  if(!E) return `<div style="margin-top:6px;font-size:12px;color:var(--faint)">オッズ補正(オリ展あり)の買い目: 3連単オッズが取れていないため出せません。</div>`;
+  const p1=[0,1,2,3,4,5].filter(i=>E.pm[i]>0).map(i=>`${chip(i)}${(E.pn[i]*100).toFixed(0)}%<span style="color:var(--faint)">(${(E.pm[i]*100).toFixed(0)})</span>`).join(" ");
+  let h=`<div style="margin-top:8px;padding:8px 10px;border:2px solid ${E.useOri?"var(--acc,#4ade80)":"var(--line,#334)"};border-radius:8px;font-size:12px">`;
+  if(E.useOri){
+    h+=`<b style="font-size:13px">オリ展ありの買い目(3連単・割安度${E.thR}以上・${E.omax}倍以下)</b><br>`
+      +(E.triC.length?E.triC.slice().sort((a,b)=>a.o-b.o).map(x=>`<b style="font-size:14px">${x.c}</b> <span style="color:var(--faint)">${x.o}倍・割安度${x.r.toFixed(2)}</span>`).join("<br>"):"<b>買い目なし(見送り)</b>");
+  }else{
+    h+=`<b>オリ展ありの買い目</b>: オリ展が全艇そろっていないため出せません(オリ展なしのモデルの3連単候補 ${E.triC.length?E.triC.slice(0,6).map(x=>x.c).join(" / "):"なし"})`;
+  }
+  h+=`<div style="margin-top:4px">補正後の1着率 ${p1} <span style="color:var(--faint)">(かっこ内はオッズの1着率)</span></div>`
+    +`<div style="color:var(--faint);margin-top:4px">${E.useOri?"この買い目の検証: 23場・約5万レースで回収率 約98〜100%(確定オッズ基準・100%超えは未確定)。上の「買い目」(プール220%＋オッズ履歴・約82%)とは別の買い方です。":"オリ展なしのモデルの検証は回収率 約90〜98%。"}</div></div>`;
+  return h;
 }
 function allocateProportional(combos, triMap, total, unit){
   /* 買い目の合計予算を、各組番の的中確率に比例させて100円単位で配分する。
