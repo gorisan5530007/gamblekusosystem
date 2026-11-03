@@ -1149,7 +1149,15 @@ function parseProgram(){
 /* ガチガチの基準: 2着・3着の補正後の確率で判定(2026年6〜10月の確認: 10%以上は全体の約3割、的中13.7%・回収率82%) */
 const GACHI_TH=0.10, COCOMO_TH=0.12;
 const POOL_CUT=1.1;
-const REC_EV=0.9, REC_OLO=5, REC_OHI=20, AGREE_RR=0.8;   /* ★★: さらに強さ指数の3連単確率 ÷ オッズの確率 が0.8以上 */   /* ★おすすめ: オリ展ありの期待値(補正後の確率×オッズ)が0.9以上・オッズ5〜20倍 */   /* 総合判定: オリ展ありの割安度がこれ未満の目をプール220%から外す */
+const REC_EV=0.9, REC_OLO=5, REC_OHI=20, AGREE_RR=0.8;
+const HIT_TOP=0.25, HIT_EV=0.85, HIT_COV=0.227;   /* ◎的中率重視: 確率上位25%までの目のうち期待値0.85以上。その確率合計が約23%以上のときだけ買う */
+function hitHtml(H){
+  if(!H) return "";
+  const body=H.ok?H.list.map(x=>`<b style="font-size:15px">${x.c}</b> <span style="color:var(--faint)">${x.o}倍・確率${(x.p*100).toFixed(1)}%</span>`).join(" / ")+` <span style="font-size:12px">(${H.list.length}点 = ${H.list.length*100}円・当たる確率 約${(H.cov*100).toFixed(0)}%)</span>`
+    :`見送り <span style="color:var(--faint);font-size:12px">(条件に合う目の確率合計 ${(H.cov*100).toFixed(0)}% < ${(HIT_COV*100).toFixed(0)}%)</span>`;
+  return `<div style="margin:2px 0 6px;padding:6px 8px;background:rgba(96,165,250,.15);border-radius:6px"><b>◎ 的中率重視(確率上位${HIT_TOP*100}%・期待値${HIT_EV}以上)</b>: ${body}`
+    +`<div style="color:var(--faint);font-size:11px">検証(23場・14か月): 858レース・1レース約2.9点・レース的中率30.7%・回収率101.3%(90%区間 92〜111%)。2026/4〜10月は286レース・99.4%。全期間を見てから選んだ条件なので、10/14以降の追跡で確認中。</div></div>`;
+}   /* ★★: さらに強さ指数の3連単確率 ÷ オッズの確率 が0.8以上 */   /* ★おすすめ: オリ展ありの期待値(補正後の確率×オッズ)が0.9以上・オッズ5〜20倍 */   /* 総合判定: オリ展ありの割安度がこれ未満の目をプール220%から外す */
 function plLam(){ const R=(typeof RATING!=="undefined")?RATING:{}; return [R.L2||0.686, R.L3||0.506]; }
 function plTri(w,i,j,m){
   const [a,b]=plLam(); let t1=0,t2=0,t3=0;
@@ -2997,7 +3005,11 @@ function renderEdgeBox(){
   REC.forEach(x=>{ x.rr=rateTri?rateTri[x.c]/(inv[x.c]/T):null; x.agree=x.rr!=null&&x.rr>=AGREE_RR; });
   REC.sort((a,b)=>(b.agree-a.agree)||(a.o-b.o));
   const recSet=new Set(REC.map(x=>x.c)), agSet=new Set(REC.filter(x=>x.agree).map(x=>x.c)), star=c=>agSet.has(c)?"★★":(recSet.has(c)?"★":"");
-  window.__edge={useOri,REC,rateOk:!!rateTri,triC:triC.slice(),pm:pm.slice(),pn:pn.slice(),thR,omax,asof:EDGE.asof,ratio};   /* 総合判定でも使う */
+  let HIT=null;
+  if(useOri){ let cum=0,cov=0; const L=[];
+    keys.map(c=>({c,o:parseFloat(oddsMap[c]),p:q[c]/Q})).sort((a,b)=>b.p-a.p).forEach(x=>{ if(cum>=HIT_TOP) return; if(x.p*x.o>=HIT_EV){ L.push(x); cov+=x.p; } cum+=x.p; });
+    HIT={list:L.sort((a,b)=>a.o-b.o),cov,ok:cov>=HIT_COV&&L.length>0}; }
+  window.__edge={useOri,REC,HIT,rateOk:!!rateTri,triC:triC.slice(),pm:pm.slice(),pn:pn.slice(),thR,omax,asof:EDGE.asof,ratio};   /* 総合判定でも使う */
   const chip=i=>`<span class="chip" style="width:17px;height:17px;font-size:10px;background:${BC[i-1]};color:${BT[i-1]}">${i}</span>`;
   const why=i=>{ const c=MD.feats.map((f,j)=>[f,MD.b[j]*Z[i][j]]).filter(x=>Math.abs(x[1])>=0.03).sort((a,b)=>Math.abs(b[1])-Math.abs(a[1])).slice(0,3);
     const N={mex30:"モーター展示",madj30:"モーター展示",m2:"モーター2連率",exst_vs_usual:"展示ST",mparts:"部品交換",last3:"直近成績",pex10:"選手の展示",
@@ -3017,6 +3029,7 @@ function renderEdgeBox(){
         +`<div style="margin:2px 0 6px;padding:6px 8px;background:rgba(250,204,21,.15);border-radius:6px"><b>★おすすめ(期待値${REC_EV}以上・${REC_OLO}〜${REC_OHI}倍)</b>: `
           +(REC.length?REC.map(x=>`<b style="font-size:15px">${x.agree?"★★":""}${x.c}</b> <span style="color:var(--faint)">${x.o}倍・期待値${x.ev.toFixed(2)}${x.rr!=null?"・強さ指数"+x.rr.toFixed(2):""}</span>`).join(" / ")+` <span style="font-size:12px">(${REC.length}点 = ${REC.length*100}円)</span>`:"なし")
           +`<div style="color:var(--faint);font-size:11px">検証(23場・14か月): 7,164点・回収率103.7%(90%区間 97〜110%、前半99.6%・後半110.3%)。表を見てから選んだ範囲なので、10/14以降の追跡で確認中。締切直前のオッズで5倍未満・期待値${REC_EV}未満になった目は外す。<br><b>★★</b> = さらに強さ指数(オッズを使わない予想)の確率がオッズの確率の${AGREE_RR}倍以上。検証(2026/4〜10・係数は3月以前で推定): 探索期間4〜7月 955点・136.1%、確認期間8〜10月 511点・116.5%(★だけは106.7%)。</div></div>`
+        +hitHtml(HIT)
         +(triC.length?triC.sort((a,b)=>a.o-b.o).map(x=>`<b style="font-size:15px">${star(x.c)}${x.c}</b> <span style="color:var(--faint)">${x.o}倍・割安度${x.r.toFixed(2)}</span>`).join("<br>")+`<br><span style="font-size:12px">各100円で${triC.length}点 = ${triC.length*100}円</span>`:"<b>このレースは買い目なし</b>(見送り)")
         +`<div style="color:var(--faint);font-size:12px;margin-top:4px">検証: 23場・約5万レース(2025/9〜2026/10、係数は前半と後半を入れ替えて推定)で、この基準の回収率は約98〜100%(90%区間 およそ94〜105%)。100%を超えるとはまだ確定していません。確定オッズで判定した値なので、締切直前のオッズで割安度が${thR}を下回った目は外してください。</div></div>`
       :`<div>3連単の候補(割安度${thR}以上・${omax}倍以下): <b>${triC.length?triC.slice(0,8).map(x=>`${x.c}(${x.o}倍)`).join(" / "):"なし"}</b>${triC.length>8?` ほか${triC.length-8}点`:""}</div>`
@@ -3888,6 +3901,7 @@ function comboEdgeHtml(chip){
       +`<div style="margin:2px 0 6px;padding:6px 8px;background:rgba(250,204,21,.15);border-radius:6px"><b>★おすすめ(期待値${REC_EV}以上・${REC_OLO}〜${REC_OHI}倍)</b>: `
           +(REC.length?REC.map(x=>`<b style="font-size:15px">${x.agree?"★★":""}${x.c}</b> <span style="color:var(--faint)">${x.o}倍・期待値${x.ev.toFixed(2)}${x.rr!=null?"・強さ指数"+x.rr.toFixed(2):""}</span>`).join(" / ")+` <span style="font-size:12px">(${REC.length}点 = ${REC.length*100}円)</span>`:"なし")
           +`<div style="color:var(--faint);font-size:11px">検証(23場・14か月): 7,164点・回収率103.7%(90%区間 97〜110%、前半99.6%・後半110.3%)。表を見てから選んだ範囲なので、10/14以降の追跡で確認中。締切直前のオッズで5倍未満・期待値${REC_EV}未満になった目は外す。<br><b>★★</b> = さらに強さ指数(オッズを使わない予想)の確率がオッズの確率の${AGREE_RR}倍以上。検証(2026/4〜10・係数は3月以前で推定): 探索期間4〜7月 955点・136.1%、確認期間8〜10月 511点・116.5%(★だけは106.7%)。</div></div>`
+      +hitHtml(E.HIT)
       +(E.triC.length?E.triC.slice().sort((a,b)=>a.o-b.o).map(x=>`<b style="font-size:14px">${(E.REC||[]).some(y=>y.c===x.c&&y.agree)?"★★":(recSet.has(x.c)?"★":"")}${x.c}</b> <span style="color:var(--faint)">${x.o}倍・割安度${x.r.toFixed(2)}</span>`).join("<br>"):"<b>買い目なし(見送り)</b>");
   }else{
     h+=`<b>オリ展ありの買い目</b>: オリ展が全艇そろっていないため出せません(オリ展なしのモデルの3連単候補 ${E.triC.length?E.triC.slice(0,6).map(x=>x.c).join(" / "):"なし"})`;
