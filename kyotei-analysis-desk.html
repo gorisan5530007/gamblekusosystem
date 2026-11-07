@@ -126,6 +126,12 @@ footer{margin-top:28px;font-size:12px;color:var(--faint);border-top:1px solid va
         <label style="font-size:12px"><input type="checkbox" id="scanOnly" checked onchange="scanRender()"> 買い目が出たレースだけ表示</label>
         <label style="font-size:12px"><input type="checkbox" id="scanStar" checked onchange="scanRender()"> ★だけでも通知</label>
         <button type="button" onclick="scanTest()" style="font-size:12px;padding:2px 8px">通知のテスト</button>
+      </div>
+      <div class="row" style="gap:6px;flex-wrap:wrap;align-items:center;margin-top:6px">
+        <span style="font-size:12px">Discord に送る:</span>
+        <input id="discordHook" type="url" autocomplete="off" placeholder="https://discord.com/api/webhooks/…" style="flex:1;min-width:180px;font-size:12px">
+        <button type="button" onclick="discordSave()" style="font-size:12px;padding:2px 8px">保存</button>
+        <span class="hint" id="discordMsg" style="font-size:11px"></span>
         <span class="msg ok" id="scanMsg" style="font-size:12px"></span>
       </div>
       <div class="hint" id="scanNote" style="font-size:11px;margin:2px 0"></div>
@@ -3620,6 +3626,7 @@ function scanBeep(){
 function scanNotify(title,body){
   let sys=false;
   if("Notification" in window&&Notification.permission==="granted"){ try{ new Notification(title,{body,requireInteraction:true}); sys=true; }catch(e){} }
+  discordSend(`🔔 **${title}**\n${body}`);
   scanBeep();
   clearInterval(titleTimer); let on=false; titleTimer=setInterval(()=>{ document.title=(on=!on)?"🔔 "+title:baseTitle; },1000);
   let bar=document.getElementById("scanBanner");
@@ -3632,11 +3639,25 @@ function scanNotify(title,body){
   bar.dataset.more=`<div style="margin-top:4px;opacity:.75;font-size:12px">${title} ${body}</div>`+(bar.dataset.more||"").slice(0,3000);
   return sys;
 }
+/* Discord へ送る(Webhook URL はこの端末のブラウザにだけ保存。デスクのファイルには入れない) */
+function discordHook(){ try{ return (localStorage.getItem("kyoteiDiscord")||"").trim(); }catch(e){ return ""; } }
+function discordSave(){
+  const v=(document.getElementById("discordHook").value||"").trim(), m=document.getElementById("discordMsg");
+  if(v&&!/^https:\/\/(discord\.com|discordapp\.com|ptb\.discord\.com|canary\.discord\.com)\/api\/webhooks\//.test(v)){ m.textContent="Discord の Webhook URL(https://discord.com/api/webhooks/… で始まるもの)を貼ってください"; return; }
+  try{ v?localStorage.setItem("kyoteiDiscord",v):localStorage.removeItem("kyoteiDiscord"); }catch(e){}
+  m.textContent=v?"保存しました(この端末だけ)":"Discord への送信をやめました";
+}
+function discordSend(text){
+  const url=discordHook(); if(!url) return false;
+  try{ const fd=new FormData(); fd.append("content",text.slice(0,1900));
+    fetch(url,{method:"POST",mode:"no-cors",body:fd}).catch(()=>{}); return true; }catch(e){ return false; }
+}
 function scanBannerClose(){ const b=document.getElementById("scanBanner"); if(b){ b.style.display="none"; b.dataset.more=""; } clearInterval(titleTimer); document.title=baseTitle; }
 function scanTest(){
   try{ scanAudio=scanAudio||new (window.AudioContext||window.webkitAudioContext)(); scanAudio.resume&&scanAudio.resume(); }catch(e){}
   if("Notification" in window&&Notification.permission==="default"){ try{ Notification.requestPermission().then(()=>{ document.getElementById("scanNote").textContent=scanNotifyState(); }); }catch(e){} }
   scanNotify("テスト 平和島 2R(締切10:05)","★★ 1-5-2(14.1倍) / ◎ 1-3-4(8倍)");
+  if(discordHook()){ const m=document.getElementById("discordMsg"); if(m) m.textContent="Discord にテストを送りました。届かないときは URL を確かめてください"; }
   document.getElementById("scanNote").textContent=scanNotifyState();
 }
 function scanRender(){
@@ -3674,7 +3695,7 @@ if(SCAN_MODE){
   });
   window.addEventListener("load",()=>{ try{ parent.postMessage({type:"kscanReady"},"*"); }catch(e){} });
 }
-if(!SCAN_MODE){ (function(){ try{ loadTimeline(false); }catch(e){} tlTimer=setInterval(()=>{ try{ renderTimeline(); }catch(e){} },30000); try{ SCAN=scanLoad(); scanRender(); }catch(e){} })(); }
+if(!SCAN_MODE){ (function(){ try{ const h=document.getElementById("discordHook"); if(h) h.value=discordHook(); }catch(e){} try{ loadTimeline(false); }catch(e){} tlTimer=setInterval(()=>{ try{ renderTimeline(); }catch(e){} },30000); try{ SCAN=scanLoad(); scanRender(); }catch(e){} })(); }
 async function autoFetchCombo(andJudge){
   const msg=document.getElementById("autoMsg"), put=(t,ok)=>{ msg.textContent=t; msg.className="msg "+(ok?"ok":"err"); };
   const pu=(document.getElementById("proxyUrl").value||"").trim().replace(/\/$/,""), pk=(document.getElementById("proxyKey").value||"").trim();
