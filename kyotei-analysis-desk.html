@@ -3049,6 +3049,7 @@ function renderEdgeBox(){
           +(REC.length?REC.map(x=>`<b style="font-size:15px">${x.agree?"★★":""}${x.c}</b> <span style="color:var(--faint)">${x.o}倍・期待値${x.ev.toFixed(2)}${x.rr!=null?"・強さ指数"+x.rr.toFixed(2):""}</span>`).join(" / ")+` <span style="font-size:12px">(${REC.length}点 = ${REC.length*100}円)</span>`:"なし")
           +`<div style="color:var(--faint);font-size:11px">検証(23場・14か月): 7,164点・回収率103.7%(90%区間 97〜110%、前半99.6%・後半110.3%)。表を見てから選んだ範囲なので、10/14以降の追跡で確認中。締切直前のオッズで5倍未満・期待値${REC_EV}未満になった目は外す。<br><b>★★</b> = さらに強さ指数(オッズを使わない予想)の確率がオッズの確率の${AGREE_RR}倍以上。検証(2026/4〜10・係数は3月以前で推定): 探索期間4〜7月 955点・136.1%、確認期間8〜10月 511点・116.5%(★だけは106.7%)。</div></div>`
         +hitHtml(HIT)
+        +`<div style="margin:6px 0 2px;font-size:12px"><b>基本の買い目(割安度${thR}以上・${omax}倍以下)</b> <span style="color:var(--faint)">★・◎とは別の条件。検証の回収率 約98〜100%</span></div>`
         +(triC.length?triC.sort((a,b)=>a.o-b.o).map(x=>`<b style="font-size:15px">${star(x.c)}${x.c}</b> <span style="color:var(--faint)">${x.o}倍・割安度${x.r.toFixed(2)}</span>`).join("<br>")+`<br><span style="font-size:12px">各100円で${triC.length}点 = ${triC.length*100}円</span>`:"<b>このレースは買い目なし</b>(見送り)")
         +`<div style="color:var(--faint);font-size:12px;margin-top:4px">検証: 23場・約5万レース(2025/9〜2026/10、係数は前半と後半を入れ替えて推定)で、この基準の回収率は約98〜100%(90%区間 およそ94〜105%)。100%を超えるとはまだ確定していません。確定オッズで判定した値なので、締切直前のオッズで割安度が${thR}を下回った目は外してください。</div></div>`
       :`<div>3連単の候補(割安度${thR}以上・${omax}倍以下): <b>${triC.length?triC.slice(0,8).map(x=>`${x.c}(${x.o}倍)`).join(" / "):"なし"}</b>${triC.length>8?` ほか${triC.length-8}点`:""}</div>`
@@ -4059,6 +4060,7 @@ function comboEdgeHtml(chip){
           +(REC.length?REC.map(x=>`<b style="font-size:15px">${x.agree?"★★":""}${x.c}</b> <span style="color:var(--faint)">${x.o}倍・期待値${x.ev.toFixed(2)}${x.rr!=null?"・強さ指数"+x.rr.toFixed(2):""}</span>`).join(" / ")+` <span style="font-size:12px">(${REC.length}点 = ${REC.length*100}円)</span>`:"なし")
           +`<div style="color:var(--faint);font-size:11px">検証(23場・14か月): 7,164点・回収率103.7%(90%区間 97〜110%、前半99.6%・後半110.3%)。表を見てから選んだ範囲なので、10/14以降の追跡で確認中。締切直前のオッズで5倍未満・期待値${REC_EV}未満になった目は外す。<br><b>★★</b> = さらに強さ指数(オッズを使わない予想)の確率がオッズの確率の${AGREE_RR}倍以上。検証(2026/4〜10・係数は3月以前で推定): 探索期間4〜7月 955点・136.1%、確認期間8〜10月 511点・116.5%(★だけは106.7%)。</div></div>`
       +hitHtml(E.HIT)
+      +`<div style="margin:6px 0 2px;font-size:12px"><b>基本の買い目(割安度${E.thR}以上・${E.omax}倍以下)</b> <span style="color:var(--faint)">★・◎とは別の条件。検証の回収率 約98〜100%</span></div>`
       +(E.triC.length?E.triC.slice().sort((a,b)=>a.o-b.o).map(x=>`<b style="font-size:14px">${(E.REC||[]).some(y=>y.c===x.c&&y.agree)?"★★":(recSet.has(x.c)?"★":"")}${x.c}</b> <span style="color:var(--faint)">${x.o}倍・割安度${x.r.toFixed(2)}</span>`).join("<br>"):"<b>買い目なし(見送り)</b>");
   }else{
     h+=`<b>オリ展ありの買い目</b>: ${oriWhy()}出せません(オリ展なしのモデルの3連単候補 ${E.triC.length?E.triC.slice(0,6).map(x=>x.c).join(" / "):"なし"})`;
