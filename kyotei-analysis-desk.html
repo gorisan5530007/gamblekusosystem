@@ -3,6 +3,12 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="競艇デスク">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="theme-color" content="#0C141D">
 <title>KYOTEI ANALYSIS DESK — ボートレース分析ツール</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Noto+Sans+JP:wght@400;500;700&family=M+PLUS+1+Code:wght@400;500;700&display=swap" rel="stylesheet">
@@ -299,6 +305,19 @@ footer .data-btns{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0}
       <span class="hint" id="discordMsg"></span>
     </div>
     <div class="hint">オンにすると、締切6〜2分前のレースを1つずつ見えないところで取得して判定します(いま見ているレースは変わりません)。★★・◎が出たら通知します。このタブを開いたままにしてください(別のタブを見ていても動きます)。スリープ中は止まります。</div>
+  </details>
+  <!-- 2026-11-17: デスクを閉じていても届くプッシュ通知(判定は中継の上で1分ごとに動く) -->
+  <details class="sub" id="pushBox">
+    <summary>スマホにプッシュ通知(デスクを閉じていても届く)</summary>
+    <div class="row" style="gap:8px;margin-top:8px;flex-wrap:wrap">
+      <button type="button" onclick="pushOn()">この端末で受け取る</button>
+      <button type="button" onclick="pushOff()">やめる</button>
+      <button type="button" onclick="pushTest()">通知のテスト</button>
+      <button type="button" onclick="pushStatus()">今日の状況</button>
+    </div>
+    <div class="hint" id="pushMsg" style="margin-top:6px"></div>
+    <div id="pushLog" style="font-size:12px;margin-top:6px;white-space:pre-wrap"></div>
+    <div class="hint">締切10分前から、★★が出たレースをこの端末に通知します。判定は中継(Cloudflare)の上で動くので、このページを閉じていても届きます。毎朝、パソコンから今日のレースのデータが送られている必要があります。iPhone は、共有ボタンから「ホーム画面に追加」して、そのアイコンから開いたときだけ受け取れます。</div>
   </details>
 </section>
 
@@ -1009,7 +1028,7 @@ footer .data-btns{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0}
 
 <footer>
   <b>データの保存</b> — 入力は自動で保存されます。手動で保存・復元・初期化するときはこちら。
-  <div class="data-btns"><button onclick="saveState()">保存</button><button onclick="loadState()">復元</button><button onclick="resetAll()">初期化</button><span class="hint">版2026-11-17a</span></div>
+  <div class="data-btns"><button onclick="saveState()">保存</button><button onclick="loadState()">復元</button><button onclick="resetAll()">初期化</button><span class="hint">版2026-11-17b</span></div>
   <b>モデルについて</b> — 開催場別のイン1着率をベースラインに、風向・風速・波高・安定板の有無で補正し、各艇のスコア(全国/当地勝率・モーター2連率・ボート2連率・展示タイム相対差・ST・級別・F持ち慎重化)を掛け合わせて1着率を推定。2着以下はPlackett-Luceモデルで展開して三連単120通りを確率化しています。「機力乖離」は選手能力を無視した機力・水面モデルと総合モデルの1着率差で、プラスに大きい艇は市場(選手人気)が見落としている可能性のある艇です。「コース実績(DB)」はファン手帳データ(2025/5〜2026/4の1年分・全1,653選手)から集計した「その選手×そのコース」の実測1着率(サンプル不足は経験ベイズで全国平均に収縮)で、登番の入力または出走表コピペで自動照合され、「コース実績」重みとしてモデルに反映されます。「分岐オッズ」は損益分岐点(1÷確率)で、実オッズがこれを上回る買い目のみ期待値プラスです。推奨投資は分数ケリー基準による理論値です。<br>
   <b>注意</b> — 競艇の控除率は約25%あり、いかなる手法も的中や利益を保証しません。部品交換・チルト・節間気配などの定性情報はモデル外です。余裕資金の範囲でご利用ください。データはこのブラウザ内にのみ保存されます(「保存」ボタン)。
 </footer>
@@ -3824,6 +3843,44 @@ function scanNotify(title,body){
 }
 /* Discord へ送る(Webhook URL はこの端末のブラウザにだけ保存。デスクのファイルには入れない) */
 function discordHook(){ try{ return (localStorage.getItem("kyoteiDiscord")||"").trim(); }catch(e){ return ""; } }
+
+/* ───────── 2026-11-17: プッシュ通知(デスクを閉じていても届く) ─────────
+   通知の宛先(この端末)を中継に登録する。判定と送信は中継の上で動く。鍵は「自動取得の設定」のものを使う */
+function pushCfg(){ const u=(document.getElementById("proxyUrl").value||"").trim().replace(/\/+$/,""), k=(document.getElementById("proxyKey").value||"").trim(); return u&&k?{u,k}:null; }
+async function pushCall(q,body){ const c=pushCfg(); if(!c) throw new Error("「自動取得の設定」で中継のURLと鍵を入れてください");
+  const r=await fetch(c.u+"/?key="+encodeURIComponent(c.k)+"&"+q,body===undefined?{cache:"no-store"}:{method:"POST",body:JSON.stringify(body)});
+  if(r.status===401) throw new Error("中継の鍵が違います");
+  const t=await r.text(); let j=null; try{ j=JSON.parse(t); }catch(e){}
+  if(!j) throw new Error("中継が古い版のようです(プッシュ通知に対応した版に入れ替えてください)");
+  if(j.error) throw new Error(j.error); return j; }
+function pushSay(t){ document.getElementById("pushMsg").textContent=t; }
+function pushCan(){ if(!/^https:/.test(location.protocol)) return "この開き方(パソコン内のファイル)では使えません。サイト(https://…)で開いてください";
+  if(!("serviceWorker" in navigator)||!("PushManager" in window)||!("Notification" in window)){ const ios=/iPhone|iPad|iPod/.test(navigator.userAgent); return ios?"iPhone は、共有ボタンから「ホーム画面に追加」して、そのアイコンから開いてください(iOS 16.4 以上)":"このブラウザはプッシュ通知に対応していません"; }
+  return ""; }
+const pushB64=s=>{ s=s.replace(/-/g,"+").replace(/_/g,"/"); const b=atob(s+"===".slice((s.length+3)%4)); return Uint8Array.from(b,c=>c.charCodeAt(0)); };
+async function pushOn(){
+  try{ const no=pushCan(); if(no) return pushSay(no);
+    pushSay("準備中…"); const {pub}=await pushCall("vapid=1");
+    if(await Notification.requestPermission()!=="granted") return pushSay("通知が許可されませんでした(ブラウザやスマホの設定から、このサイトの通知を許可してください)");
+    const reg=await navigator.serviceWorker.register("sw.js"); await navigator.serviceWorker.ready;
+    let sub=await reg.pushManager.getSubscription();
+    if(sub){ const cur=sub.options&&sub.options.applicationServerKey?btoa(String.fromCharCode(...new Uint8Array(sub.options.applicationServerKey))).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,""):""; if(cur&&cur!==pub){ await sub.unsubscribe(); sub=null; } }
+    if(!sub) sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:pushB64(pub)});
+    const r=await pushCall("sub=1",{sub:sub.toJSON()});
+    try{ localStorage.setItem("kyoteiPush","1"); }catch(e){}
+    pushSay(`この端末を登録しました(宛先 ${r.n}件)。「通知のテスト」で届くか確かめてください`);
+  }catch(e){ pushSay("登録できませんでした: "+e.message); } }
+async function pushOff(){
+  try{ const reg=("serviceWorker" in navigator)?await navigator.serviceWorker.getRegistration():null, sub=reg?await reg.pushManager.getSubscription():null;
+    if(sub){ try{ await pushCall("unsub=1",{endpoint:sub.endpoint}); }catch(e){} await sub.unsubscribe(); }
+    try{ localStorage.removeItem("kyoteiPush"); }catch(e){}
+    pushSay("この端末への通知をやめました"); }catch(e){ pushSay("やめられませんでした: "+e.message); } }
+async function pushTest(){ try{ pushSay("送信中…"); const r=await pushCall("pushtest=1"); pushSay(r.n?`${r.n}件の宛先のうち ${r.sent}件に送りました${(r.errs||[]).length?"(失敗: "+r.errs.join(",")+")":""}。数秒で届きます`:"宛先がまだありません。先に「この端末で受け取る」を押してください"); }catch(e){ pushSay("送れませんでした: "+e.message); } }
+async function pushStatus(){ try{ const s=await pushCall("status=1");
+    pushSay(s.races?`今日の対象 ${s.races}レース(係数 ${s.asof} まで)・判定済み ${s.done}・宛先 ${s.subs}件・締切${s.at}分前から判定`:"今日のレースのデータがまだ届いていません(パソコンの毎朝の送信がまだです)");
+    const esc=t=>String(t).replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
+    document.getElementById("pushLog").innerHTML=(s.picks||[]).filter(p=>p[9]==="★★").map(p=>`<b>★★ ${esc(VENMAP[p[1]]||p[1])} ${p[2]}R(締切${esc(p[3])}) ${esc(p[4])} ${(+p[5]).toFixed(1)}倍</b> 期待値${(+p[6]).toFixed(2)}・${esc(p[0])}判定`).concat((s.log||[]).slice(-8).reverse().map(esc)).join("\n");
+  }catch(e){ pushSay("状況を取れませんでした: "+e.message); } }
 function discordSave(){
   const v=(document.getElementById("discordHook").value||"").trim(), m=document.getElementById("discordMsg");
   if(v&&!/^https:\/\/(discord\.com|discordapp\.com|ptb\.discord\.com|canary\.discord\.com)\/api\/webhooks\//.test(v)){ m.textContent="Discord の Webhook URL(https://discord.com/api/webhooks/… で始まるもの)を貼ってください"; return; }
