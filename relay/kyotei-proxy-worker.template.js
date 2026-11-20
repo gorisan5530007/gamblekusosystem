@@ -1,5 +1,5 @@
 /*
-  競艇ツール用の中継(Cloudflare Workers)  版: 2026-11-17a(★★の判定とプッシュ通知を追加)
+  競艇ツール用の中継(Cloudflare Workers)  版: 2026-11-20a(★★の判定を締切10分前と5分前の2回・通知の記録)
   スマホのブラウザからはボートレース公式サイトを直接読み込めない(ブラウザの安全のための制限)ため、
   この中継を通して、出走表・直前情報・オッズのページを取ってくる。
 
@@ -17,7 +17,7 @@ const ALLOW = ["www.boatrace.jp",
   "www.boatrace-shimonoseki.jp", "www.wmb.jp", "www.boatrace-ashiya.com", "www.boatrace-karatsu.jp",
   // BOATCAST(ボートレース振興会の公式動画サービス)。全場のオリジナル展示を小さなテキストで出している(2026/11/01追加)
   "race.boatcast.jp"];
-const VERSION = "2026-11-17a";
+const VERSION = "2026-11-20a";
 
 const HEADERS = {
   "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
@@ -73,7 +73,8 @@ export default {
    ・毎朝、パソコンが「今日のレースぶんの下ごしらえデータ」を送ってくる(?digest=)。保存先は KV(名前 KV で結びつける)
    ・締切 AT 分前になったレースについて、オリジナル展示 → 直前情報 → 3連単オッズ を取り、★★が出たらプッシュ通知を送る
    ・1レースにつき、取りに行くのは1分に1回まで。直前情報やオリ展がまだなら、締切3分前まで試し直す(パソコン版と同じ) */
-const AT = 10;            // 締切の何分前から判定するか
+const AT = 10;            // 締切の何分前から判定するか(1回目)
+const AT2 = 5;            // 2回目(オッズが動いて★★に入る目を取りこぼさないため)
 const MAX_PER_TICK = 2;   // 1回の起動で見るレースの数(取りに行く回数と計算時間を抑える)
 const SUBJECT = "https://gorisan5530007.github.io/gamblekusosystem/";   // 通知の送り主の連絡先(プッシュ通知の決まりで必要。個人の情報は入れない)
 
@@ -286,7 +287,8 @@ async function sendPush(KV, title, body, tag) {
 /* ── 取りに行く ── */
 const UA = { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36", "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8", "Accept-Language": "ja,en-US;q=0.7,en;q=0.3" };
 async function getText(url, referer) {
-  const r = await fetch(url, { headers: { ...UA, "Referer": referer }, redirect: "follow", cf: { cacheTtlByStatus: { "200-299": 15, "300-599": 0 }, cacheEverything: true } });
+  const fresh = /boatrace\.jp/.test(url);   // オッズ・直前情報は毎回取り直す(使い回すと少し前のオッズで判定してしまう)
+  const r = await fetch(url, fresh ? { headers: { ...UA, "Referer": referer, "Cache-Control": "no-cache" }, redirect: "follow", cf: { cacheTtl: 0, cacheEverything: false } } : { headers: { ...UA, "Referer": referer }, redirect: "follow", cf: { cacheTtlByStatus: { "200-299": 15, "300-599": 0 }, cacheEverything: true } });
   if (!r.ok) throw new Error("取得 " + r.status);
   const buf = await r.arrayBuffer(), ct = r.headers.get("Content-Type") || "";
   let m = /charset=([\w-]+)/i.exec(ct); if (!m) m = /charset=["']?([\w-]+)/i.exec(new TextDecoder("latin1").decode(buf.slice(0, 3000)));
@@ -322,30 +324,38 @@ async function tick(env) {
   if (G.ymd !== now.ymd || !G.idx) { G = { ymd: now.ymd, idx: await KV.get(`d:${now.ymd}:idx`, "json"), ven: {}, tries: {}, last: {} }; }
   const idx = G.idx; if (!idx) return "今日の下ごしらえデータがまだ届いていません";
   const due = idx.races.filter(([v, r, dl]) => dl - now.min <= AT && dl > now.min - 1); if (!due.length) return "待機中";
-  const st = (await KV.get(`st:${now.ymd}`, "json")) || { done: {}, log: [], picks: [] };
+  const st = (await KV.get(`st:${now.ymd}`, "json")) || { done: {}, log: [], picks: [] }; st.sent = st.sent || {};
   let changed = false, n = 0; const notes = [];
-  /* まだ試していないレースを先に、次に締切の近い順(1回の起動で見る数に上限があるため、同じレースばかりにならないように) */
-  const tr = ([v, r]) => G.tries[`${v}-${r}`] || 0;
-  for (const [v, r, dl] of due.sort((a, b) => (tr(a) - tr(b)) || (a[2] - b[2]))) {
-    const k = `${v}-${r}`; if (st.done[k]) continue;
+  /* 1回目(締切AT分前〜)と2回目(AT2分前〜)。まだ試していないものを先に、次に締切の近い順 */
+  const stage = ([v, r]) => st.done[`${v}-${r}`] || 0;
+  const tr = ([v, r]) => G.tries[`${v}-${r}-${stage([v, r])}`] || 0;
+  const want = ([v, r, dl]) => { const sg = stage([v, r]); return sg === 0 || (sg === 1 && dl - now.min <= AT2); };
+  for (const q of due.filter(want).sort((a, b) => (tr(a) - tr(b)) || (a[2] - b[2]))) {
+    const [v, r, dl] = q, k = `${v}-${r}`, sg = stage(q), tk = `${k}-${sg}`;
     const dlS = `${String(Math.floor(dl / 60)).padStart(2, "0")}:${String(dl % 60).padStart(2, "0")}`;
-    if (now.min > dl - 0.5) { st.done[k] = 1; st.log.push(`${VEN[v]}${r}R: 締切までに判定できなかった`); changed = true; continue; }
-    if (Date.now() - (G.last[k] || 0) < 55000) continue;   // 同じレースを試し直すのは1分おき
+    if (now.min > dl - 0.5) { if (sg === 0) st.log.push(`${VEN[v]}${r}R: 締切までに判定できなかった`); st.done[k] = 2; changed = true; continue; }
+    if (Date.now() - (G.last[tk] || 0) < 55000) continue;   // 同じレースを試し直すのは1分おき
     if (n >= MAX_PER_TICK) break; n++;
-    G.last[k] = Date.now();
+    G.last[tk] = Date.now();
     if (!G.ven[v]) G.ven[v] = await KV.get(`d:${now.ymd}:${v}`, "json");
-    const x = (G.ven[v] || []).find(q => q.r === r); if (!x) { st.done[k] = 1; changed = true; continue; }
+    const x = (G.ven[v] || []).find(t => t.r === r); if (!x) { st.done[k] = 2; changed = true; continue; }
     const [s, msg, res] = await runOne(idx.M, x, now.ymd);
-    G.tries[k] = (G.tries[k] || 0) + 1;
-    if (s === "done" || G.tries[k] >= 8 || dl - now.min < 3) {
-      st.done[k] = 1; changed = true; st.log.push(`${now.hm} ${msg}`); st.log = st.log.slice(-200);
-      if (res) for (const t of res) st.picks.push([now.hm, v, r, dlS, t.c, t.o, +t.ev.toFixed(3), +t.pr.toFixed(4), +t.rr.toFixed(3), t.k]);
-      const s2 = (res || []).filter(t => t.k === "★★");
-      if (s2.length) notes.push([`★★ ${VEN[v]} ${r}R(締切${dlS})`, s2.map(t => `${t.c}(${t.o.toFixed(1)}倍・期待値${t.ev.toFixed(2)})`).join(" / ") + " ※買う前にオッズを確かめてください", k]);
+    G.tries[tk] = (G.tries[tk] || 0) + 1;
+    const last = sg === 0 ? dl - now.min < 3 : dl - now.min < 1.5;
+    if (s === "done" || G.tries[tk] >= 8 || last) {
+      st.done[k] = (sg === 0 && dl - now.min > AT2) ? 1 : 2; changed = true;
+      const lab = sg === 0 ? "" : "(2回目)"; st.log.push(`${now.hm} ${msg}${lab}`); st.log = st.log.slice(-200);
+      if (res) for (const t of res) st.picks.push([now.hm, v, r, dlS, t.c, t.o, +t.ev.toFixed(3), +t.pr.toFixed(4), +t.rr.toFixed(3), t.k, sg + 1]);
+      const sent = st.sent[k] || [], s2 = (res || []).filter(t => t.k === "★★" && !sent.includes(t.c));   // 前に通知した目は送らない
+      if (s2.length) { st.sent[k] = sent.concat(s2.map(t => t.c));
+        notes.push([`★★ ${VEN[v]} ${r}R(締切${dlS})${sg ? " 2回目" : ""}`, s2.map(t => `${t.c}(${t.o.toFixed(1)}倍・期待値${t.ev.toFixed(2)})`).join(" / ") + " ※買う前にオッズを確かめてください", `${k}-${sg}`]); }
     }
   }
   if (changed) await KV.put(`st:${now.ymd}`, JSON.stringify(st), { expirationTtl: 3 * 86400 });   // 先に「済み」を残してから通知する(二重に送らないため)
-  for (const [t, b, k] of notes) await sendPush(KV, t, b, k);
+  if (notes.length) {
+    for (const [t, b, k] of notes) { const pr = await sendPush(KV, t, b, k); st.log.push(`${jst().hm} 通知 ${t}: ${pr.n ? `${pr.sent}/${pr.n}件に送信${(pr.errs || []).length ? "(失敗 " + pr.errs.join(",") + ")" : ""}` : "宛先なし"}`); }
+    st.log = st.log.slice(-200); await KV.put(`st:${now.ymd}`, JSON.stringify(st), { expirationTtl: 3 * 86400 });   // 送れたかを記録
+  }
   return `見たレース ${n}`;
 }
 
@@ -364,7 +374,7 @@ async function api(request, env, u, cors) {
   if (q.has("digest")) { const ymd = q.get("digest"), part = q.get("part"); if (!/^\d{8}$/.test(ymd) || !/^(idx|\d{1,2})$/.test(part || "")) return J({ error: "指定が違います" }, 400);
     const body = await request.text(); JSON.parse(body); await KV.put(`d:${ymd}:${part}`, body, { expirationTtl: 3 * 86400 }); if (G.ymd === ymd) G.idx = null; return J({ ok: true, bytes: body.length }); }
   if (q.has("status")) { const now = jst(), idx = await KV.get(`d:${now.ymd}:idx`, "json"), st = (await KV.get(`st:${now.ymd}`, "json")) || { done: {}, log: [], picks: [] };
-    return J({ ymd: now.ymd, now: now.hm, races: idx ? idx.races.length : 0, asof: idx ? idx.M.asof : null, done: Object.keys(st.done).length, log: st.log.slice(-30), picks: st.picks, subs: ((await KV.get("subs", "json")) || []).length, at: AT }); }
+    return J({ ymd: now.ymd, now: now.hm, races: idx ? idx.races.length : 0, asof: idx ? idx.M.asof : null, done: Object.keys(st.done).length, log: st.log.slice(-30), picks: st.picks, subs: ((await KV.get("subs", "json")) || []).length, at: AT, at2: AT2 }); }
   if (q.has("run")) { const now = jst(), [v, r] = q.get("run").split("-").map(Number), idx = await KV.get(`d:${now.ymd}:idx`, "json"); if (!idx) return J({ error: "今日の下ごしらえデータがありません" }, 404);
     const x = ((await KV.get(`d:${now.ymd}:${v}`, "json")) || []).find(t => t.r === r); if (!x) return J({ error: "そのレースはありません" }, 404);
     const [s, msg, res] = await runOne(idx.M, x, now.ymd); return J({ s, msg, res }); }   // その場で1レース判定してみる(通知は送らない)
